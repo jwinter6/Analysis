@@ -1,3 +1,5 @@
+# ui.R
+
 #
 # This is a Shiny web application. You can run the application by clicking
 # the 'Run App' button above.
@@ -30,28 +32,8 @@ library(openxlsx)
 library(shinyjs)
 library(shinyBS)
 library(qpcR)
-library(readr)
 
-
-
-options(shiny.reactlog=FALSE) 
-options(shiny.sanitize.errors = TRUE)
-
-
-## CONFIG
-config <- list()
-config$mainDir <- "."
-config$appDir <- file.path(config$mainDir, "app")
-
-# create userDir
-startTime <- Sys.time()
-config$userID <- paste0(format(startTime, format = "%y%m%d_%H%M%S_"), paste(sample(0:9, 4), collapse = ""))
-config$userDir <- file.path(config$mainDir, config$userID)
-
-dir.create(config$userDir)
-
-
-
+source("config.R", local=TRUE)
 
 # Define UI for application that draws a histogram
 
@@ -105,7 +87,7 @@ sidebar <- dashboardSidebar(sidebarMenu(
            menuSubItem("Analysis", tabName = "incucyte_analysis")
            #menuSubItem("Set Analysis Parameters", tabName = "settings")
   ),
-
+  
   ## qPCR
   # user needs to upload the XLSX overview file so that the app knows what has been done
   # If user used the robot, information will be derived additional from the cDNA and Mastermix plates for QC, otherwise only the 394 well overview plate will be shown
@@ -134,13 +116,8 @@ sidebar <- dashboardSidebar(sidebarMenu(
 ##############
 #tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "test.css")), 
 body <- dashboardBody(
-
-  shiny::tags$head(
-    #shiny::tags$style(HTML(config$stylesheet)),
-    #shiny::includeScript("analytics.js"),
-    #shiny::includeScript("tooltip-delay.js")
-  ),
   
+
   shinydashboard::tabItems(
     
     ## Welcome
@@ -161,28 +138,31 @@ body <- dashboardBody(
     source(file.path(config$appDir, "qpcr_data.R"), local = TRUE)$value,
     source(file.path(config$appDir, "qpcr_qc.R"), local = TRUE)$value,
     source(file.path(config$appDir, "qpcr_analysis.R"), local = TRUE)$value
-   
     
-  ),
+    
+  )#,
   
   #### MODALS
   ### So that modals appear on any page
   
-
-  shinyBS::bsModal(id = "luc_data_error_modal", title = "Uploaded Data Files do not correlate with XLSX information", trigger = "lucdataerrormodal", size = "large", 
-                   fluidRow(
-                     style="width:100%;",
-                     column(width=8,offset=2, class="alert alert-danger text-center",
-                            shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-exclamation-triangle fa-4x"></i>')),
-                            shiny::tags$span(shiny::tags$p(class="lead text-center", "Not Plate or FLUC/RLUC information found in file names. Check for case-sensitivity."))
-                     )
-                   )
-  )
-
+  
+  # shinyBS::bsModal(id = "fastqextraction_finished", title = "Data Upload and Data Check finished", trigger = "test", size = "large", 
+  #                  fluidRow(
+  #                    style="width100%;",
+  #                    column(width=8, offset=2, class="alert alert-success",
+  #                           shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-check fa-4x"></i>')),
+  #                           shiny::tags$span(
+  #                             shiny::tags$p(class="lead text-center", "Your data files have been uploaded and checked successfully."),
+  #                             shiny::tags$p(class="text-center","As a next step, please go to the Data Review section.")
+  #                           )
+  #                    )
+  #                  )
+  # )
   
   
   
-  )
+  
+)
 
 
 
@@ -191,43 +171,9 @@ body <- dashboardBody(
 #### run UI ####
 ################
 # compatible with bookmarking state
-ui <- dashboardPage( 
+shinyUI(dashboardPage( 
   header,
   sidebar,
   body )
-
-
-
-# Define server logic required to draw a histogram
-server <- function(input, output, session) {
-   
-  
-  error <- list("luc_xlsx" = FALSE,
-                "luc_data" = FALSE
-                )
-  
-  cData <- session$clientData
-  
-  # once session is done, remove config$userDir
-  session$onSessionEnded(function() {
-    print(paste("remove UserDirectory: ", config$userDir))
-    system2(command = "rm", args = c("-r", "-f", config$userDir))
-    unlink(config$userDir, recursive = TRUE)
-  })
-  
-  # 4096MB upload limit per file
-  options(shiny.maxRequestSize = 4096 * 1024^2)
- 
-  source(file.path(config$appDir, "outputs.R"), local=TRUE)
-  source(file.path(config$appDir, "functions.R"), local=TRUE)
-  
-    # load incucyte module
-  
-    # load  Dual luciferase module
-  
-    # load qPCR module
-}
-
-# Run the application 
-shinyApp(ui = ui, server = server)
+)
 

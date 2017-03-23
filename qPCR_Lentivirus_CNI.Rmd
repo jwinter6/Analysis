@@ -1,0 +1,836 @@
+---
+title: "qPCR Lentivirus Integration"
+author: "Jan Winter"
+date: "17 Mai 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+
+# Estimation of Lentivirus Copy Number Integration (CNI) after Infection
+
+This will estimate the number of successfull integrations of WPRE after infection with a lentivirus containing a WPRE site.
+
+## Settings
+
+- Infected cells: 100000
+- Vector used: MarieU6-onchip
+
+```{r loadfile, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+
+library(DT)
+library(knitr)
+
+path <- "/Users/janwinter/Documents/PhD/Results/qPCR/2016-08-08_MOI_Lib4_Lib5_Lib6_Lib7"
+knitr::opts_chunk$set(root.dir = path)
+# JAN Lib4-5_check
+excel.sheet <- file.path(path,"qPCR_VirusTiter_Template.xlsx")
+setwd(path)
+
+
+
+
+
+# Jan TRIAL4 new standards
+#excel.sheet <- "/Users/janwinter/Documents/PhD/Results/qPCR/2016-06-27_qPCR_MOI_Screens_new-Standards/qPCR_VirusTiter_Template.xlsx"
+#setwd("/Users/janwinter/Documents/PhD/Results/qPCR/2016-06-27_qPCR_MOI_Screens_new-Standards")
+
+MOI.desired <- 0.4
+
+# Output from qPCR Machine
+#rawdata <- read.table(file = "/Users/janwinter/Desktop/test.txt", header = TRUE, sep="\t", fill = TRUE)
+# Each Sample is a own data frame with the following columns:
+#   Well | Condition | Cq Value
+# Later we will add columns:
+# CN (Copy number) | CNI (Copy number integration)
+
+# ALL DATA IS READ BY WELL defined! e.g. A1, A5 or B7
+
+# Load qPCR Worksheet
+## contains:
+### - Overview
+### - Reagents
+### - SampleDefinition
+### - Calibration
+### - qPCRData
+### - cDNA
+### - Mastermix
+library(openxlsx)
+overview <- as.matrix(openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "Overview"))
+cDNA <-as.data.frame(openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "cDNA"))
+mastermix <-as.data.frame(openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "mastermix"))
+standards <- as.data.frame(openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "Calibration"))
+#samples <- openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "SampleDefinition")
+qPCRData <- openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "qPCRData")
+qPCRData <- merge.data.frame(x=qPCRData, y=cDNA[,c("Type","q_PCR_Well_Pos","Sample")], by.x= "Pos", by.y = "q_PCR_Well_Pos", all.x=TRUE)
+
+# Remove bad calibration points
+#standards <- standards[-c(1,7),] # the two highest ones..
+
+
+# Print tables
+
+DT::datatable(qPCRData, class="hover", caption = "qPCR Rawdata")
+
+DT::datatable(standards, class="hover", caption = "Standards used for Linear Regression")
+
+```
+
+## Plate Setup
+
+```{r plateview-setup, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+knitr::opts_chunk$set(root.dir = path)
+
+#httr::with_config(httr::use_proxy(url = "http://www-int2.inet.dkfz-heidelberg.de", port=80, auth="basic"), devtools::install_github("briandconnelly/ggplot2bdc"))
+
+platemap <- as.data.frame(cDNA)
+# Add qPCR data value if present
+
+
+library(dplyr)
+ 
+platemap <- dplyr::mutate(platemap,
+                   Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+
+platemapmastermix <- as.data.frame(mastermix)
+platemapmastermix <- dplyr::mutate(platemapmastermix,
+                   Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+
+
+library(ggplot2)
+ 
+
+
+ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(size=10) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+    labs(title="Occupied Wells")
+
+# 
+# library(ggplot2bdc)
+ 
+# ggplot(data=platemap, aes(x=Column, y=Row)) +
+#     geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+#                color="grey90", fill="white", shape=21, size=6) +
+#     geom_point(size=10) +
+#     coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+#     scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+#     scale_x_continuous(breaks=seq(1, 24)) +
+#     labs(title="Plate Layout for My Experiment") 
+#     #theme_bdc_microtiter() # only for 96-wells..
+
+# Plate all Samples
+
+platemap$Type <- as.factor(platemap$Type)
+ 
+ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(shape=Type, colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  scale_shape_manual(values=seq(from=0, to = length(unique(platemap$Type)), by=1 ) ) +
+    labs(title="Plate Layout: Sample Types") #+
+    #theme_bdc_microtiter()
+
+# Plate as TEXT
+ggplot(data=platemap, aes(x=Column, y=Row, label=platemap$Sample)) +
+  
+    geom_text(aes(colour=Sample), size=2) + 
+  
+    #geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+    #           color="grey90", fill="white", shape=21, size=6) +
+    #geom_point(aes(shape=Type, colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  scale_shape_manual(values=seq(from=0, to = length(unique(platemap$Type)), by=1 ) ) +
+    labs(title="Plate Layout: Added Virus [uL]") #+
+    #theme_bdc_microtiter()
+
+# Plate as Genes
+
+ggplot(data=platemapmastermix, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+    labs(title="Plate Mastermix Layout for My Experiment") #+
+
+########## 96 Well master plates
+
+cDNAplate <- as.data.frame(cDNA)
+cDNAplate <- mutate(platemap,
+                   Row=as.numeric(match(toupper(substr(Rack.Position, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Rack.Position, 2, 5)))
+
+mastermixplate <- as.data.frame(mastermix)
+mastermixplate <- mutate(mastermixplate,
+                   Row=as.numeric(match(toupper(substr(Rack.Position, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Rack.Position, 2, 5)))
+
+# PLate 96 Well plates for qPCR preparation
+
+# cDNA plate
+ggplot(data=cDNAplate, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(shape=Type, colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+  scale_shape_manual(values=seq(from=0, to = length(unique(cDNAplate$Type)), by=1 ) ) +
+    labs(title="cDNA Master Plate") #+
+    #theme_bdc_microtiter()
+
+# Mastermix plate
+ggplot(data=mastermixplate, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes( colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+    labs(title="qPCR Mastermix Plate") #+
+    #theme_bdc_microtiter()
+
+
+
+
+
+
+```
+
+
+# qPCR Data
+
+```{r plate-cq, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+knitr::opts_chunk$set(root.dir = path)
+
+####### Plot qPCR rawdata
+
+qPCRplate <- as.data.frame(qPCRData)
+qPCRplate <- mutate(qPCRplate,
+                   Row=as.numeric(match(toupper(substr(Pos, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Pos, 2, 5)))
+
+qPCRplate$Cp <- round(as.numeric(qPCRplate$Cp), digits=2)
+
+ggplot(data=qPCRplate, aes(x=Column, y=Row, label=qPCRplate$Cp)) +
+  
+    geom_text(size=1.5) + 
+  
+    #geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+    #           color="grey90", fill="white", shape=21, size=6) +
+    #geom_point(aes(shape=Type, colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(qPCRplate$Type)), by=1 ) ) +
+    labs(title="qPCR RAW Cq Values") #+
+
+
+
+# Plate text and colors
+
+qPCRplate$Type <- as.factor(qPCRplate$Type)
+qPCRplate$Cp <- as.character(qPCRplate$Cp)
+qPCRplate$Cp[is.na(qPCRplate$Cp)] <- "-"
+ 
+ggplot(data=qPCRplate, aes(x=Column, y=Row, label=qPCRplate$Cp)) +
+    geom_text(aes(colour=Sample), size=1.5) +
+   # geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+    #           color="grey90", fill="white", shape=21, size=6) +
+    #geom_point(aes(colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(qPCRplate$Type)), by=1 ) ) +
+    labs(title="qPCR RAW Cq values") #+
+
+
+```
+
+## Standards and qPCR Calculations
+
+```{r calculations, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+knitr::opts_chunk$set(root.dir = path)
+
+############################################
+############ STANNDARDS ####################
+############################################
+
+### Get Standards and the Values
+# Names of Standards
+standards.names <- unique(standards$Gene)
+
+# Get Data and construct list
+list.standard <- list()
+list.model <- list()
+
+for(i in 1:length(standards.names))
+{
+  df <- as.data.frame(standards[standards$Gene == standards.names[[i]],])
+  # Add data from qPCR
+  df$Data <- sapply(df$Wells, function(x){
+    # Get well data
+    wells <- unlist(strsplit(as.character(x),","))
+    #print(str(wells))
+    return(mean(as.numeric(qPCRData[qPCRData$Pos %in% wells,"Cp"]), na.rm=TRUE) )
+  })
+  
+  # make log of concentration
+  df$Sample <- log10(df$Sample)
+  if(i==1)
+  {
+    list.standard <- list(df)
+    list.model <- list(NA)
+  }
+  else
+  {
+    list.standard <- c(list.standard, list(df))
+    list.model <- c(list.model, list(NA))
+  }
+}
+# Set Names
+names(list.standard) <- standards.names
+names(list.model) <- standards.names
+
+# Fit linear regression
+
+for ( i in 1:length(list.model))
+{
+  # model <- (lm(Sample ~ Data, data=list.standard[[i]]))
+  model <- lm(Data ~ Sample, data=list.standard[[i]])
+  cat("\n")
+  cat("\n")
+  print(names(list.standard)[i])
+  print(summary(model))
+  
+  # Save list
+  list.model[[i]] <- model
+  
+  # make plots
+  cat("\n")
+  plot(y = list.standard[[i]]$Data, x=list.standard[[i]]$Sample, xlab = "Log10 Molecules", ylab = "Cq Value", main = paste("Standard", names(list.standard)[i], sep=" "))
+  abline(model, lwd=2, col="red")
+}
+
+############################################
+########### Load qPCR data #################
+############################################
+
+
+# Predict qPCR Values on linear regression model (LOG10 fitted!)
+
+  # Get data for each sample for this gene
+  
+
+# get samples
+predicted.data <- data.frame(
+  Well = cDNA$q_PCR_Well_Pos,
+  Sample = cDNA$Sample,
+  Type = cDNA$Type,
+  Replicate = cDNA$Replicate,
+  stringsAsFactors = FALSE
+)
+
+# Add Gene information from mastermix plate
+predicted.data$Gene <- sapply(predicted.data$Well, function(x){
+  
+  return(mastermix[mastermix$q_PCR_Well_Pos == x,"Sample"])
+})
+
+# Add raw Cq values (0.0034 ng per haploid genome)
+predicted.data$Cq <- NA
+
+# Add new volumns
+predicted.data$Fit <- ""
+predicted.data$CN <- ""
+#predicted.data$lwr <- ""
+#predicted.data$upr <- ""
+
+
+for(i in 1:nrow(predicted.data))
+{
+  
+  # get cq value and predicted copy number from standard curve
+  cq <- as.numeric(qPCRData[qPCRData$Pos == predicted.data[i,"Well"] ,"Cp"])
+  # Since we use Y~X and we want to know which Y leads to which X, we cannot use the linear regression model for calculations directly,
+  # thus we need to make the formula from y= to x=
+  
+  cc <- coef(list.model[[predicted.data[i,"Gene"]]])
+  xnew <- (cq-cc[1])/cc[2]
+  
+  #predicted <- predict(object = list.model[[predicted.data[i,"Gene"]]], data.frame(Data = cq),  level = 0.9, interval = "confidence")
+  
+  predicted.data[i,"Cq"] <- as.numeric(cq)
+  predicted.data[i,"Fit"] <- as.numeric(xnew)
+  #predicted.data[i,"Fit"] <- as.numeric(predicted[1])
+  #predicted.data[i,"lwr"] <- as.numeric(predicted[2])
+  #predicted.data[i,"upr"] <- as.numeric(predicted[3])
+  predicted.data[i,"CN"] <- as.numeric(10^(xnew))
+  
+  
+}
+
+
+
+
+
+
+
+
+
+
+#     
+# predicted.data <- do.call(rbind.data.frame, apply(samples,1,function(x){
+#     # get Cq value from qPCRData
+#     wells <- unlist(strsplit(x["Wells"],","))
+#     
+#     for(u in 1:length(wells))
+#     {
+#       
+#       cq <- as.numeric(qPCRData[qPCRData$Pos == wells[u] ,"Cp"])
+#       predicted <- predict(object = list.model[[x["Gene"]]], data.frame(Data = cq),  level = 0.9, interval = "confidence")
+#       if(u == 1)
+#       {
+#         
+#         return.well <- data.frame( "Wells" = wells[[u]], 
+#                                    "Fit" = as.numeric(predicted[1]),
+#                                    "lwr" = as.numeric(predicted[2]),
+#                                    "upr" = as.numeric(predicted[3]),
+#                                    "Gene" = x["Gene"],
+#                                    "Type" = x["Type"],
+#                                    "Sample" = x["Sample"],
+#                                    stringsAsFactors = FALSE)
+#       }
+#       else
+#       {
+#         return.well <- rbind.data.frame(return.well,
+#                                         c(wells[[u]], 
+#                                     as.numeric(predicted[1]),
+#                                     as.numeric(predicted[2]),
+#                                     as.numeric(predicted[3]),
+#                                    x["Gene"],
+#                                     x["Type"],
+#                                    x["Sample"]) )
+#       }
+#       if(u == length(wells))
+#       {
+#         return(return.well)  
+#       }
+#       
+#     }
+# 
+#   }) )
+#   
+
+#colnames(predicted.data) <- c("Well","Fit","lwr","upr","Gene","Type","Sample")
+rownames(predicted.data) <- predicted.data[,"Well"]
+
+# Convert back from log10
+#predicted.data <- as.data.frame(t(predicted.data), stringsAsFactors = FALSE)
+predicted.data$Fit <- as.numeric(10^(as.numeric(predicted.data$Fit)))
+#predicted.data$lwr <- as.numeric(10^(as.numeric(predicted.data$lwr)))
+#predicted.data$upr <- as.numeric(10^(as.numeric(predicted.data$upr)))
+
+to.compare <- c("WPRE","GAPDH")
+list.predicted <- list("WPRE" = NA, "GAPDH" = NA)
+for(i in 1:length(to.compare))
+{
+  
+  list.predicted[[i]] <- predicted.data[predicted.data$Gene == to.compare[i],]
+  
+}
+
+##########
+########## Already calculated: copy number accoridng to standards
+#### Now: we calculate the copy number per cell by dividing the number of WPRE copies by the number of GAPDH, and multiple the result by 2 since two GAPDH copies are present in hek cells.
+
+predicted.data$MOIfit <- NA
+
+for(i in 1:nrow(predicted.data))
+{
+ 
+  if(predicted.data[i,"Gene"] == "WPRE")
+  {
+    
+    # Now we check the sample, type and replicate and use the combination, to find the matching replicate with the gene GAPDH, which is the reference gene!
+    wpre <- as.numeric(predicted.data[i,"Fit"])
+    gapdh <- as.numeric(predicted.data[predicted.data$Sample == predicted.data[i,"Sample"] & predicted.data$Type == predicted.data[i,"Type"] & predicted.data$Replicate == predicted.data[i,"Replicate"] & predicted.data[,"Gene"] ==  "GAPDH","Fit"])
+    
+    #print(wpre)
+    #print(gapdh)
+     if(is.na(wpre) || is.na(gapdh) )
+    {
+      predicted.data[i,"MOIfit"] <- NA
+    }
+    else
+    {
+      predicted.data[i,"MOIfit"] <- as.numeric(wpre / gapdh )*2
+    }
+    
+  }
+ 
+}
+
+# predicted.data$MOIlwr <- NA
+# 
+# for(i in 1:nrow(predicted.data))
+# {
+#   
+#   if(predicted.data[i,"Gene"] == "WPRE" && predicted.data[i,"Type"] !="MIX")
+#   {
+#     
+#     # Now we check the sample, type and replicate and use the combination, to find the matching replicate with the gene GAPDH, which is the reference gene!
+#     wpre <- as.numeric(predicted.data[i,"lwr"])
+#     gapdh <- as.numeric(predicted.data[predicted.data$Sample == predicted.data[i,"Sample"] & predicted.data$Type == predicted.data[i,"Type"] & predicted.data$Replicate == predicted.data[i,"Replicate"] & predicted.data[,"Gene"] ==  "GAPDH","lwr"])
+#     
+#     # print(wpre)
+#     # print(gapdh)
+#     if(is.na(wpre) || is.na(gapdh) )
+#     {
+#       predicted.data[i,"MOIlwr"] <- NA
+#     }
+#     else
+#     {
+#       predicted.data[i,"MOIlwr"] <- as.numeric(wpre / gapdh )*2
+#     }
+#     
+#   }
+# }
+# 
+# 
+# predicted.data$MOIupr <- NA
+# 
+# for(i in 1:nrow(predicted.data))
+# {
+#   
+#   if(predicted.data[i,"Gene"] == "WPRE" && predicted.data[i,"Type"] !="MIX")
+#   {
+#     
+#     # Now we check the sample, type and replicate and use the combination, to find the matching replicate with the gene GAPDH, which is the reference gene!
+#     wpre <- as.numeric(predicted.data[i,"upr"])
+#     gapdh <- as.numeric(predicted.data[predicted.data$Sample == predicted.data[i,"Sample"] & predicted.data$Type == predicted.data[i,"Type"] & predicted.data$Replicate == predicted.data[i,"Replicate"] & predicted.data[,"Gene"] ==  "GAPDH","upr"])
+#     
+#     # print(wpre)
+#     # print(gapdh)
+#     if(is.na(wpre) || is.na(gapdh) )
+#     {
+#       predicted.data[i,"MOIupr"] <- NA
+#     }
+#     else
+#     {
+#       predicted.data[i,"MOIupr"] <- as.numeric(wpre / gapdh )*2
+#     }
+#     
+#     
+#   }
+# }
+
+
+
+### Print table
+
+DT::datatable(predicted.data, class="hover", caption = "qPCR Data Calculations")
+
+```
+
+## Plateplot Results
+
+```{r plateplotresults, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+knitr::opts_chunk$set(root.dir = path)
+#### MAKE PLATEPLOTS WITH RESULTS
+
+resultmap <- mutate(predicted.data,
+                   Row=as.numeric(match(toupper(substr(Well, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Well, 2, 5)))
+
+### plot FIT
+
+resultmap$Type <- as.factor(resultmap$Type)
+resultmap$Sample <- as.factor(resultmap$Sample)
+resultmap$CN <- as.character(round(as.numeric(resultmap$CN), digits = 2))
+resultmap$MOIfit <- as.character(round(as.numeric(resultmap$MOIfit), digits = 2))
+resultmap$C1[is.na(resultmap$Cq)] <- "-"
+ 
+ggplot(data=resultmap, aes(x=Column, y=Row, label=resultmap$CN)) +
+    geom_text(aes(colour=Sample), size=1.5) +
+   # geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+    #           color="grey90", fill="white", shape=21, size=6) +
+    #geom_point(aes(colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(qPCRplate$Type)), by=1 ) ) +
+    labs(title="Copy Numbers per Well according to Linear Regression of the Standard") #+
+
+
+
+ 
+ggplot(data=resultmap, aes(x=Column, y=Row, label=resultmap$MOIfit)) +
+    geom_text(aes(colour=Type), size=1.5) +
+   # geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+    #           color="grey90", fill="white", shape=21, size=6) +
+    #geom_point(aes(colour=Sample), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(qPCRplate$Type)), by=1 ) ) +
+    labs(title="Calculated Mean Copy Number per Cell according to Linear Regression") #+
+
+
+
+```
+
+## Highcharter MOI Plots
+
+```{r highcharts, eval=TRUE, warning=FALSE,message=FALSE, echo=FALSE, dpi=300}
+knitr::opts_chunk$set(root.dir = path)
+###########
+########## CREATE HIGHCHARTER PLOTS
+
+
+
+# Make data rdy for plot, mean replicates
+list.samples <- as.list(unique(predicted.data$Type))
+names(list.samples) <- unique(predicted.data$Type)
+
+plot.output <- as.list(unique(predicted.data$Type))
+names(plot.output) <- unique(predicted.data$Type)
+
+
+for(i in 1:(length(list.samples)))
+{
+  
+  # Make final DF
+  # df.WPRE <- data.frame(
+  # "Type" = unique(predicted.data[predicted.data$Gene=="WPRE" & predicted.data$Sample==names(list.samples)[i],"Type"]),
+  # #"Sample" = unique(predicted.data[predicted.data$Gene=="WPRE","Sample"]),
+  # stringsAsFactors = FALSE
+  # )
+  
+  
+  ######## CREATE HIGHCHARTER PLOT
+  
+  # Add MEAN per replicate + SD
+    
+  df.WPRE <- aggregate.data.frame(predicted.data[predicted.data$Gene=="WPRE" & predicted.data$Type==names(list.samples)[i],c("MOIfit")], by = list(predicted.data[predicted.data$Gene=="WPRE" & predicted.data$Type==names(list.samples)[i],"Sample"]), FUN = function(x) { mean(x, na.rm=TRUE) })
+  colnames(df.WPRE) <- c("Sample","MOIfit")
+  
+  df.WPRE$Sample <- as.numeric(df.WPRE$Sample)
+  
+
+  
+  colnames(df.WPRE) <- c("Concentration", "Predicted MOI")
+  
+  # Sort
+  list.samples[[i]] <- df.WPRE[order(df.WPRE$Concentration),]
+  
+  # Rdy for output
+  
+  library(highcharter)
+  
+  hc <- highcharter::highchart()
+  hc <- highcharter::hc_chart(hc, type = "line", zoomType="xy")
+  hc <- highcharter::hc_title(hc, text = paste("MOI for", names(list.samples)[i], sep=" "))
+  hc <- highcharter::hc_subtitle(hc, text = "Calculated MOI by CopyNumber detection using GAPDH")
+  hc <- highcharter::hc_xAxis(hc, title = list(text = "Added Virus [uL]"),
+                                       categories = as.character( list.samples[[i]]$Concentration)  )
+  hc <- highcharter::hc_yAxis(hc,
+        title = list(text = "Calculated MEAN MOI"),
+        align = "left",
+        showFirstLabel = FALSE,
+        showLastLabel = FALSE,
+        labels = list(useHTML = TRUE)
+      )
+    
+  # Add Fitted MOI Data
+  hc <- highcharter::hc_add_series(hc, name = "MOI Fitted", data =  list.samples[[i]][,"Predicted MOI"])
+  
+  # Add MOI 0.4 Line
+  hc <- highcharter::hc_add_series(hc, name = "MOI of 0.4", data = rep(x=MOI.desired, times = nrow(list.samples[[i]])))
+
+
+  hc <- highcharter::hc_legend(hc, enabled = TRUE)
+  hc <- highcharter::hc_exporting(hc, enabled = TRUE)
+  hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE,
+             shared = TRUE, borderWidth = 0)
+
+  hc <- highcharter::hc_add_theme(hc, highcharter::hc_theme_google())
+
+  plot.output[[i]] <- hc
+
+}
+
+
+
+##### Higcharter plot combined ALL IN ONE
+
+
+library(highcharter)
+  
+  hc <- highcharter::highchart()
+  hc <- highcharter::hc_chart(hc, zoomType="xy")
+  hc <- highcharter::hc_title(hc, text = paste("MOI for", names(list.samples)[i], sep=" "))
+  hc <- highcharter::hc_subtitle(hc, text = "Calculated MOI by CopyNumber detection using GAPDH")
+  #hc <- highcharter::hc_xAxis(hc, title = list(text = "Applied Sample Concentration"),
+   #                                    categories = seq(from=1, to = length(unique(predicted.data$Sample)), by=1) )  
+  hc <- highcharter::hc_yAxis(hc,
+        title = list(text = "Calculated MEAN MOI"),
+        align = "left",
+        showFirstLabel = FALSE,
+        showLastLabel = FALSE,
+        labels = list(useHTML = TRUE)
+      )
+    
+  # Add Fitted MOI Data
+  for(i in 1:(length(list.samples)-2) )
+  {
+    
+    df <- list.samples[[i]]
+    if(class(df) == "data.frame")
+    {
+      print(df)
+      colnames(df) <- c("x","y")
+      hc <- highcharter::hc_add_series_df(hc, type = "scatter", data =  df, name = as.character(names(list.samples)[i]))  
+    }
+
+  }
+  
+ 
+  # Add MOI 0.4 Line
+  hc <- highcharter::hc_add_series(hc, type="scatter", name = "MOI of 0.4", data = rep(x=MOI.desired, times = nrow(list.samples[[i]])))
+
+
+  hc <- highcharter::hc_legend(hc, enabled = TRUE)
+  hc <- highcharter::hc_exporting(hc, enabled = TRUE)
+  hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE,
+             shared = TRUE, borderWidth = 0)
+
+  #hc <- highcharter::hc_add_theme(hc, highcharter::hc_theme_google())
+
+  hc
+
+## from predicted data
+  
+hchart(predicted.data, type="scatter", x = Sample, y = MOIfit, group=Type, class=Sample) %>% hc_chart(zoomType="xy")
+
+
+# Write to Excel
+# wb <- openxlsx::loadWorkbook(excel.sheet , xlsxFile = NULL)
+# for(i in 1:length(list.samples))
+# {
+#   
+#   openxlsx::addWorksheet(wb, paste("Analysis", names(list.samples)[i], sep="_") )
+#   openxlsx::writeDataTable(wb, paste("Analysis", names(list.samples)[i], sep="_"), x = list.samples[[i]], startCol = 1, startRow = 1, xy = NULL,
+# colNames = TRUE, rowNames = FALSE, tableStyle = "TableStyleLight9",
+# tableName = names(list.samples)[i], headerStyle = NULL, withFilter = TRUE,
+# keepNA = FALSE)
+#   
+#   
+# }
+# 
+# # Save Workbook
+# openxlsx::saveWorkbook(wb, file = excel.sheet, overwrite = TRUE)
+
+
+
+
+
+
+```
+
+## CopyNumber Calculation
+
+Copy Numbers have been calculated by:
+
+- calculation of the CopyNumber of both WPRE and GAPDH by linear regression on log10 transformed Molecules (Standard Curve)
+- CopyNumber of WPRE was then divided by the CopyNumber of the respective GAPDH value
+- Since GAPDH is present twice, we multiple the result by 2
+
+Desired MOI: `r MOI.desired`
+
+Finally we receive the number of WPRE integrations in a diploid genome of the pool of cells infected with a certain amount of virus
+
+```{r CN, echo=FALSE, eval=TRUE, results="asis"}
+knitr::opts_chunk$set(root.dir = path)
+
+
+
+# 
+# ggplot(data=qPCRplate, aes(x=Column, y=Row, label=qPCRplate$Cp)) +
+#     geom_text(aes(colour=Sample), size=2.5) +
+#    # geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+#     #           color="grey90", fill="white", shape=21, size=6) +
+#     #geom_point(aes(colour=Sample), size=6) +
+#     coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+#     scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+#     scale_x_continuous(breaks=seq(1, 24)) +
+#   #scale_shape_manual(values=seq(from=0, to = length(unique(qPCRplate$Type)), by=1 ) ) +
+#     labs(title="Plate Layout for My Experiment") #+
+
+
+
+
+
+
+
+
+
+plot.output[[1]]
+plot.output[[2]]
+plot.output[[3]]
+plot.output[[4]]
+plot.output[[5]]
+plot.output[[6]]
+plot.output[[7]]
+plot.output[[8]]
+plot.output[[9]]
+plot.output[[10]]
+plot.output[[11]]
+plot.output[[12]]
+plot.output[[13]]
+plot.output[[14]]
+plot.output[[15]]
+plot.output[[16]]
+plot.output[[17]]
+plot.output[[18]]
+plot.output[[19]]
+plot.output[[20]]
+plot.output[[21]]
+plot.output[[22]]
+plot.output[[23]]
+plot.output[[24]]
+plot.output[[25]]
+plot.output[[26]]
+
+
+
+# for(i in 1:length(list.samples))
+# {
+#   cat("\n")
+#   cat("### ", "Copy Number Calculation for Library: ", names(list.samples)[i])
+#   cat("\n")
+#   
+#   cat("\n")
+#   cat(paste(names(list.samples)[i]))
+#   cat("\n")
+#   print(knitr::kable(list.samples[[i]]))
+#   cat("\n")
+# }
+
+```
+
+

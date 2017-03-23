@@ -1,0 +1,108 @@
+---
+title: "sgRNA_duplex_order"
+author: "Jan Winter"
+date: "23 1 2017"
+output: html_document
+---
+
+# Description
+
+Generates sgRNA oligos with appropriate overhang to order as annealed oligos with IDT directly.
+
+Requires sgRNA sequences in the format of:  
+GENE_sgRNAsequence
+
+
+
+```{r setup, include=FALSE}
+# file with list of sgRNA identifiers
+path = "/Users/janwinter/OneDrive/PhD/Followup/sgRNA"
+sgRNAfile <- "2017_sgRNA_followup_Round1.txt"
+
+sgRNAs <- readr::read_tsv(file.path(path,sgRNAfile))
+
+overhang1 <- "CACC" #5 to 3 prime
+overhang2 <- "GTTT" #5 to 3 prime NOT REVERSE!
+
+pattern <- "^(.+)_(.+)$"
+```
+
+# Get Gene name and sgRNAs 
+
+```{r}
+sgorder <- data.frame(
+  "design" <- sgRNAs[,1],
+  stringsAsFactors = FALSE
+)
+
+colnames(sgorder) <- c("design")
+
+# extract targetseq
+sgorder$targetsequence <- gsub(pattern = pattern, x = sgorder$design, replacement = "\\2")
+sgorder$gene <- gsub(pattern = pattern, x = sgorder$design, replacement = "\\1")
+
+## make forward and reverse oligos
+sgorder$fw <- paste(overhang1, sgorder$targetsequence, sep="")
+rv <- DNAStringSet(paste(sgorder$targetsequence, overhang2,  sep=""))
+
+library(Biostrings)
+sgorder$rv <- as.vector(reverseComplement(rv))
+
+# Add well information (same well for both sgRNAs, we can distribute layouts later)
+# Vector with all 96-well things
+#some sample ids
+ids <- c(LETTERS, letters)
+#plate size:
+n <- 96
+nrow <- 8
+samples <- character(n)
+samples[seq_along(ids)] <- ids
+
+samples <- matrix(samples, nrow=nrow)
+colnames(samples) <- seq_len(n/nrow)
+rownames(samples) <- LETTERS[seq_len(nrow)]
+# Melt to DF
+library(reshape2)
+samples <- melt(samples)
+samples$position <- paste0(samples$Var1, samples$Var2)
+samples$well <- rownames(samples)
+
+
+```
+
+# Distribute into 96-well plates
+
+```{r}
+# cut DF after 96 samples
+
+plates <- ceiling(nrow(sgorder)/96)
+
+sgplates <- list()
+
+for( i in 1:plates)
+{
+  print(i)
+  start <- (((i*96)-95))
+  end <- (i*96)
+  if (end > nrow(sgorder))
+  {
+    end <- nrow(sgorder)
+  }
+  get <- start:end
+  sgplates[i] <- list(sgorder[get,])
+  sgplates[[i]]$well <- 1:nrow(sgplates[[i]])
+  
+  # merge
+  sgplates[[i]] <- merge.data.frame(x=sgplates[[i]], y=samples, by.x = "well", by.y = "well", all.x = TRUE)
+  
+  # Export to TAB separated
+  platename <- paste("sgRNAplate", i, sep="_")
+  print(platename)
+  readr::write_tsv(sgplates[[i]], path = file.path(path, paste(platename, ".tsv", sep="") ))
+  
+}
+
+
+
+
+```

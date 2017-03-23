@@ -1,0 +1,153 @@
+---
+title: "Incucyte Data Analysis"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+# Incucyte Data
+
+This notebook provides infomration about Data derived from the Incucyte automated microscopy device.
+
+## Data structure
+
+Incucyte data must be structured the following way:  
+
+`
+Label: HEK_F_1
+Metric: PhaseIM Confluence (Percent)
+Cell Type: HEK293T_TCF
+Passage: 1
+Notes: 
+Analysis Job: 2017-03-03_HEKTCF_sgRNA_viability1
+
+Date Time	Elapsed	HEK_F_1: HEK293T_TCF (1) 50K / well
+03.03.2017 20:00:00	0	5,722833
+`
+
+Each well is one column with the SAMPLE separated by the Plate name with a *:*.  
+Replicates need to be set!  
+If STDErr is also present, this will be always the column next to it!
+
+## Setup parameters
+
+```{r setup}
+stderr_present <- FALSE
+filepath <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Microscopy/2017-03-03_24-well_sgRNATEST/"
+filename <- "2017-03-06_replicates.txt"
+
+```
+
+STDErr is presnet in the file? `r stderr_present`  
+File is located in `r filepath` with the name `r filename`.
+
+## Data Handling
+
+```{r load}
+
+data <- readr:: read_tsv(file = file.path(filepath,filename),col_names = TRUE, skip = 7, locale = readr::locale(decimal_mark = ","))
+
+# get correct colnames
+col_names <- colnames(data)
+## get all after the ","
+col_names <- sub(pattern = "^.*,\\s+(.*)$", perl = TRUE, replacement = "\\1", x = col_names)
+
+colnames(data) <- col_names
+samples <- as.list(col_names[3:length(col_names)])
+names(samples) <- col_names[3:length(col_names)]
+
+data.raw <- data
+```
+
+## Raw Data
+
+```{r datatable}
+
+DT::datatable(data,class="stripe hover")
+
+# Normalize Data with the FIRST value for each sample! -> column wise!
+for(i in 3: length(col_names))
+{
+  # divide by the first element of the column
+  data[[i]] <- data[[i]] / data[[i]][1]
+}
+
+DT::datatable(data,class="stripe hover")
+
+```
+
+
+# Plots
+
+## Overall Plot
+
+```{r plot-all-rawdata}
+library(highcharter)
+
+hc <- highcharter::highchart() %>%
+  highcharter::hc_chart(type="spline",zoomType="xy")%>%
+  highcharter::hc_title(text = "Cell Confluence") %>%
+  highcharter::hc_subtitle(text = "for all sampled with median replicates") %>%
+  highcharter::hc_xAxis(title = list(text = "Sample")) %>%
+  highcharter::hc_yAxis(title = list(text = "Confluence in %")) %>%
+  highcharter::hc_legend(enabled = TRUE) %>%
+  highcharter::hc_exporting(enabled = TRUE,
+                 printMaxWidth = 2000,
+                 filename = paste(filename, "_Plot_all"),
+                 scale=8,
+                 formAttributes = list(target = "_blank")
+                 )
+
+  for(i in 1:length(samples))
+  {
+    plotdata <- data.raw[,c("Elapsed",names(samples)[i])]
+    colnames(plotdata) <- c("x", "y")
+    hc <- highcharter::hc_add_series(hc, data = plotdata, name = names(samples)[i])
+  }
+
+  hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE, borderWidth = 0, delayForDisplay = 1500) %>%
+    highcharter::hc_add_theme(highcharter::hc_theme_google())
+
+hc
+
+
+```
+
+```{r plot-all}
+library(highcharter)
+
+hc <- highcharter::highchart() %>%
+  highcharter::hc_chart(type="spline",zoomType="xy")%>%
+  highcharter::hc_title(text = "Cell Confluence") %>%
+  highcharter::hc_subtitle(text = "for all sampled with median replicates") %>%
+  highcharter::hc_xAxis(title = list(text = "Sample")) %>%
+  highcharter::hc_yAxis(title = list(text = "Normalized Confluence in Foldchange from Start")) %>%
+  highcharter::hc_legend(enabled = TRUE) %>%
+  highcharter::hc_exporting(enabled = TRUE,
+                 printMaxWidth = 2000,
+                 filename = paste(filename, "_Plot_all"),
+                 scale=8,
+                 formAttributes = list(target = "_blank")
+                 )
+
+  for(i in 1:length(samples))
+  {
+    plotdata <- data[,c("Elapsed",names(samples)[i])]
+    colnames(plotdata) <- c("x", "y")
+    hc <- highcharter::hc_add_series(hc, data = plotdata, name = names(samples)[i])
+  }
+
+  hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE, borderWidth = 0, delayForDisplay = 1500) %>%
+    highcharter::hc_add_theme(highcharter::hc_theme_google())
+
+hc
+
+
+```
+
+
+
+
+
+
+

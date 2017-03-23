@@ -1,0 +1,631 @@
+title: "Dual Luciferase Assay"
+output: 
+  html_document: 
+    highlight: tango
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+---
+
+# Aim
+
+The Aim of this file is to load luciferase-based assay data containing a Firefly (FLUC) as well as an Renilla (RLUC) luciferase signal.  
+RLUC is considered as the normalization signal, e.g. cell number, whereas FLUC contains the phenotype signal.
+
+# Load Data
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Path yo XLS and assay files
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/Assays/2016-12-03_HEKTCF-HCT116_Luc-check/"
+# Name of XLS sheet
+excel.sheet <- file.path(path,"2016-12-03_HEKTCF-HCT116.xlsx")
+
+# Name of Assay files
+## Must be named like:
+## NAME_PlateX-RLUC/FLUC
+# Will be automatically read according to the entry in the XLS sheet
+
+name <- "20161205_Hek293-HCT116"
+
+# Median normalization?
+normalize = FALSE
+```
+
+
+## Load XLS Overview file
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(openxlsx)
+library(reshape2)
+library(dplyr)
+library(highcharter)
+
+# Get XLS File
+
+knitr::opts_chunk$set(root.dir = path)
+
+
+
+# Open XLSX File
+## File is structured in the following way
+## Worksheets:  Protocol (contains Aim, FLUC, RLUC, Treatment)
+##              Sheet1 (Sheet2 etc.) containing the 96 well plate as plate format, 1-12 in rows A-H, which needs to be pared into a data frame
+
+workbook <- openxlsx::loadWorkbook(excel.sheet,xlsxFile = NULL)
+wb_names <- names(workbook)
+
+
+# Get Protocol
+protocols <- openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = "Protocol", colNames = FALSE, rowNames = FALSE)
+protocol <- protocols[,2]
+names(protocol) <- protocols[,1]
+
+# Get Sheets
+plates <- list()
+groups <- NA
+## check if multiple
+for(i in 2:length(wb_names))
+{
+  if(grepl(pattern = "Plate.+", x=wb_names[i]) )
+  {
+    plates[[wb_names[i]]]$layout <- as.data.frame(openxlsx::read.xlsx(xlsxFile = excel.sheet, sheet = wb_names[i], colNames = TRUE, rowNames = TRUE), stringsAsFactors=FALSE)
+    
+    plates[[wb_names[i]]]$shape <- reshape2::melt(as.matrix(plates[[wb_names[i]]]$layout))
+    pattern <- expression("^(\\d{1})$")
+    plates[[wb_names[i]]]$shape$Var2 <- sub(pattern = pattern, replacement = paste("0","\\1", sep=""), x=  plates[[wb_names[i]]]$shape$Var2, fixed = FALSE )
+    plates[[wb_names[i]]]$shape$position <- paste0(plates[[wb_names[i]]]$shape$Var1, plates[[wb_names[i]]]$shape$Var2)
+    
+    # set treatment groups
+    groups <- c(groups, as.character(plates[[wb_names[i]]]$shape$value))
+    
+  }
+  
+}
+
+# Now we make treatment groups in list
+## They will be used for plotting later, NA are wells that will not be used for anything later on
+groups <- unique(groups) # might be used later
+
+# according to tidyverse, data will be kept like that:
+## Column1: treatment
+## Column2: FLUC signal
+## Column3: RLUC signal
+
+
+# We achieve this by loading the data, parsing the position as plate X at well A12 and putting it together with the treatment in the row.
+# this rrequires that FLUC and RLUC signals of the same plate are in the same dataframe
+```
+
+
+## Load TXT Files with Sample Data
+
+Two files, one for each Luciferase Signal
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+data <- as.list(names(plates))
+names(data) <- names(plates)
+
+library(readr)
+
+for(i in 1:length(data))
+{
+  # FLUC
+  data[[i]]$FLUC <- readr::read_tsv(file = file.path(path,paste(name,"_",names(data)[i],"-FLUC.TXT", sep="")), col_names=FALSE, quoted_na = FALSE)
+  colnames(data[[i]]$FLUC) <- c("Plate", "Well", "FLUC")
+  data[[i]]$FLUC$Plate <- NULL
+  # RLUC
+  data[[i]]$RLUC <- readr::read_tsv(file = file.path(path,paste(name,"_",names(data)[i],"-RLUC.TXT", sep="")), col_names=FALSE, quoted_na = FALSE)
+  colnames(data[[i]]$RLUC) <- c("Plate", "Well", "RLUC")
+  data[[i]]$RLUC$Plate <- NULL
+  
+  # Combine them in one
+  data[[i]]$ALL <- dplyr::inner_join(data[[i]]$FLUC, data[[i]]$RLUC, by="Well")
+  data[[i]]$ALL$Plate <- paste("Plate",i,sep="")
+  
+  # Median normaliziation
+  if(normalize){
+    data[[i]]$ALL$FLUC <- data[[i]]$ALL$FLUC/ median(data[[i]]$ALL$FLUC, na.rm = TRUE)
+    data[[i]]$ALL$RLUC <- data[[i]]$ALL$RLUC/ median(data[[i]]$ALL$RLUC, na.rm = TRUE)
+  }
+  
+  # Add the treatment to it
+  data[[i]]$ALL$Treatment <- sapply(data[[i]]$ALL$Well, function(x){
+    # Get treatment for same plate from plates$Plate1$[plates$Plate1$$position == x , "value"]
+     return(as.character(plates[[names(data)[i]]]$shape[plates[[names(data)[i]]]$shape$position == as.character(x),"value"]))
+  })
+  
+  # Remove NA
+  data[[i]]$ALL <- dplyr::filter(data[[i]]$ALL, !is.na(Treatment))
+  
+  # Create Platemap
+  data[[i]]$platemap <- dplyr::mutate(as.data.frame(data[[i]]$ALL),
+                   Row=as.numeric(match(toupper(substr(Well, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Well, 2, 5)))
+
+}
+
+
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Now we have all data in
+# data$PLATEX#ALL in a row-based tidyverse compatible system
+
+## Aim: Merge all to have a single tbl
+
+plot <- list()
+
+# store in plot$data
+for(i in 1:length(data))
+{
+  if(i==1)
+  {
+    # create tbl
+    plot$data <- tibble::tibble("Plate" = data[[i]]$ALL$Plate,
+                                "Treatment" = data[[i]]$ALL$Treatment,
+                                "FLUC" = data[[i]]$ALL$FLUC,
+                                "RLUC" = data[[i]]$ALL$RLUC,
+                                "Well" = data[[i]]$ALL$Well,
+                                "FLUC.median" = NA,
+                                    "FLUC.mean" = NA,
+                                    "FLUC.sd" = NA,
+                                    "RLUC.median" = NA,
+                                    "RLUC.mean" = NA,
+                                    "RLUC.sd" = NA
+                                )
+   
+  }
+  else{
+    # Add rows of other datasets
+    plot$data <- dplyr::bind_rows(plot$data, data[[i]]$ALL[,c("Plate", "Treatment", "FLUC", "RLUC", "Well")])
+  }
+}
+
+
+## Normalize: FLUC / RLUC
+plot$data$Divided <- plot$data$FLUC/plot$data$RLUC
+
+
+## Transform to log2
+plot$data$Log2 <- log2(plot$data$Divided)
+
+# Transform Inf and -Inf to NA
+plot$data$Divided <- sapply(plot$data$Divided, function(x){
+  if(is.infinite(x) || is.nan(x)){
+    return(NA)
+  } else {
+    return(x)
+  }
+})
+
+plot$data$Log2 <- sapply(plot$data$Log2, function(x){
+  if(is.infinite(x) || is.nan(x)){
+    return(NA)
+  } else {
+    return(x)
+  }
+})
+  
+  
+
+
+  
+  
+```
+
+# Data Overview
+
+## Samples
+
+```{r sample-overview, fig.width=10, fig.height=7, resuls='asis', dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+cat("\n")
+for(i in 1:length(data))
+{
+  
+  cat("\n")
+  cat("### ", names(data)[i])
+  cat("\n")
+  # PLate Overview of Samples
+  platemap <- dplyr::mutate(plates[[names(data)[i]]]$shape,
+                   Row=as.numeric(match(toupper(substr(position, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(position, 2, 5)))
+  
+  g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(color=value), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+  scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
+    labs(title="Plate Layout: Sample Types") 
+  
+  
+ 
+  
+  print(g)
+}
+
+
+```
+
+## Data
+
+
+```{r data-overview, results='asis', dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
+
+cat("\n")
+for(i in 1:length(data))
+{
+  cat("\n")
+  data_use <- dplyr::filter(plot$data, Plate == names(data)[i])
+  # if no treatment is specified -> set to NA
+  data_use[is.na(data_use$Treatment),c("Treatment","FLUC","RLUC","Divided","Log2")] <- NA
+  
+  cat("\n")
+  cat("### ", names(data)[i])
+  cat("\n")
+  
+  # Plate Overview of Samples
+  platemap <- dplyr::mutate(data_use,
+                   Row=as.numeric(match(toupper(substr(Well, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Well, 2, 5)))
+  cat("\n")
+  cat("### ", "TCF Reporter FLUC")
+  cat("\n")
+  # FLUC
+  
+  g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(color=FLUC), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
+    labs(title=paste("Plate Layout:", "FLUC", names(data)[i], sep=" ") )
+  
+  print(g)
+  
+  
+  # RLUC
+  cat("\n")
+  cat("### ", "TCF Reporter FLUC")
+  cat("\n")
+  
+  g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(color=RLUC), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
+    labs(title=paste("Plate Layout:", "RLUC", names(data)[i], sep=" ") )
+  
+  print(g)
+  
+  
+  #  Divided
+  cat("\n")
+  cat("### ", "TCF Reporter FLUC normalized to RLUC")
+  cat("\n")
+  
+  g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 12), seq(1, 8)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(color=Divided), size=6) +
+    coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 12.5), ylim=c(0.5, 8.5)) +
+    scale_y_reverse(breaks=seq(1, 8), labels=LETTERS[1:8]) +
+    scale_x_continuous(breaks=seq(1, 12)) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
+    labs(title=paste("Plate Layout:", "Normalized Activity", names(data)[i], sep=" ") )
+  
+  print(g)
+  
+  
+}
+
+```
+
+
+
+# Results
+
+## Treatment Group Statistics
+
+```{r treatmentstatistics, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
+# Data is stored in plot$data
+# compare groups
+
+treatmentgroups <- tibble::tibble("Treatment" = groups,
+                         "FLUC.median" = NA,
+                         "FLUC.mean" = NA,
+                         "FLUC.sd" = NA,
+                         "RLUC.median" = NA,
+                         "RLUC.mean" = NA,
+                         "RLUC.sd" = NA
+                         )
+treatmentgroups <- treatmentgroups[-is.na(treatmentgroups$Treatment),]
+
+treatmentgroups$FLUC.mean <- sapply(treatmentgroups$Treatment, function(x){
+    return(mean(plot$data[plot$data$Treatment == as.character(x),"FLUC"]$FLUC, na.rm=TRUE))
+})
+treatmentgroups$FLUC.median <- sapply(treatmentgroups$Treatment, function(x){
+    return(median(plot$data[plot$data$Treatment == as.character(x),"FLUC"]$FLUC, na.rm=TRUE))
+})
+treatmentgroups$FLUC.sd <- sapply(treatmentgroups$Treatment, function(x){
+    return(sd(plot$data[plot$data$Treatment == as.character(x),"FLUC"]$FLUC, na.rm=TRUE))
+})
+
+treatmentgroups$RLUC.mean <- sapply(treatmentgroups$Treatment, function(x){
+    return(mean(plot$data[plot$data$Treatment == as.character(x),"RLUC"]$RLUC, na.rm=TRUE))
+})
+treatmentgroups$RLUC.median <- sapply(treatmentgroups$Treatment, function(x){
+    return(median(plot$data[plot$data$Treatment == as.character(x),"RLUC"]$RLUC, na.rm=TRUE))
+})
+treatmentgroups$RLUC.sd <- sapply(treatmentgroups$Treatment, function(x){
+    return(sd(plot$data[plot$data$Treatment == as.character(x),"RLUC"]$RLUC, na.rm=TRUE))
+})
+
+treatmentgroups$activity.mean <- treatmentgroups$FLUC.mean / treatmentgroups$RLUC.mean
+#dplyr::arrange(treatmentgroups, Treatment)
+
+# add SD to plot$data so that it can be used for more plot
+for(i in 1:nrow(plot$data)) {
+  
+  plot$data$FLUC.median[i] <- treatmentgroups$FLUC.median[treatmentgroups$Treatment == plot$data$Treatment[i]]
+  plot$data$FLUC.mean[i] <- treatmentgroups$FLUC.mean[treatmentgroups$Treatment == plot$data$Treatment[i]]
+  plot$data$FLUC.sd[i] <- treatmentgroups$FLUC.sd[treatmentgroups$Treatment == plot$data$Treatment[i]]
+  plot$data$RLUC.median[i] <- treatmentgroups$RLUC.median[treatmentgroups$Treatment == plot$data$Treatment[i]]
+  plot$data$RLUC.mean[i] <- treatmentgroups$RLUC.mean[treatmentgroups$Treatment == plot$data$Treatment[i]]
+  plot$data$RLUC.sd[i] <- treatmentgroups$RLUC.sd[treatmentgroups$Treatment == plot$data$Treatment[i]]
+}
+
+DT::datatable(treatmentgroups)
+```
+
+
+
+## Plots
+
+```{r plots, results='asis', dpi=300, echo=FALSE, warning=FALSE, message=FALSE}
+# Boxplots with rawdata activity, no fold changes between groups
+## in plot$data
+##  Plate Treatment  FLUC  RLUC  Well Divided      Log2
+
+# non-log transformed
+  cat("\n")
+  cat("### ", "Ratio")
+  cat("\n")
+
+p <- ggplot(plot$data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Ratio between FLUC and RLUC", x = "Samples", y = "FLUC / RLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+
+# log2 transformed
+  cat("\n")
+  cat("### ", "Log2")
+  cat("\n")
+p <- ggplot(plot$data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Log2 Ratio between FLUC and RLUC", x = "Samples", y = "FLUC / RLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+
+
+# RLUC
+  cat("\n")
+  cat("### ", "RLUC")
+  cat("\n")
+p <- ggplot(plot$data, aes(x=Treatment, y=RLUC, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "RLUC", x = "Samples", y = "RLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+# FLUC
+  cat("\n")
+  cat("### ", "FLUC")
+  cat("\n")
+p <- ggplot(plot$data, aes(x=Treatment, y=FLUC, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "FLUC", x = "Samples", y = "FLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+
+
+```
+
+
+
+
+
+# Special Plots
+
+```{r specialplots, results='asis', dpi=300, echo=FALSE, warning=FALSE, message=FALSE, eval=FALSE}
+# Here only manually curated plots come into place
+library(ggplot2)
+library(highcharter)
+
+# Compare NON-Transduced
+datas <- list()
+datas[1] <- list(dplyr::filter(plot$data, Treatment %in% c("APC","CSNK1A1",	"Topflash",	"CFC1",	"GDE1","B4GALT6","TTLL4","PLGRKT","IDO1","px459_p1")))
+datas[2] <- list(dplyr::filter(plot$data, Treatment %in% c("Topflash", "CFC1",	"GDE1","B4GALT6","TTLL4","PLGRKT","IDO1","px459_p1","RLUC")))
+datas[3] <- list(dplyr::filter(plot$data, Treatment %in% c("APC",	"APC_50",	"CSNK1A1",	"CSNK1A1_50", "Topflash", "Topflash_50","RLUC_50")))
+datas[4] <- list(dplyr::filter(plot$data, Treatment %in% c("Topflash_50", "CFC1_50",	"GDE1_50","B4GALT6_50","TTLL4_50","PLGRKT_50","IDO1_50","px459_p1_50")))
+datas[5] <- list(dplyr::filter(plot$data, Treatment %in% c("Topflash","Topflash_50","CFC1", "CFC1_50","GDE1", "GDE1_50","B4GALT6","B4GALT6_50","TTLL4","TTLL4_50","PLGRKT","PLGRKT_50","IDO1","IDO1_50","px459_p1","px459_p1_50") ))
+datas[6] <- list(dplyr::filter(plot$data, Treatment %in% c("px459_p1", "px459_p1_50","px459_p2", "px459_p2_50", "px459_p3", "px459_p3_50", "px459_p4", "px459_p4_50")))
+#datas[7] <- list(dplyr::filter(plot$data, Treatment %in% c("TransIT", "TransIT_100","APC1", "APC1_100",	"APC2", "APC2_100",	"BcatAxin1", "BcatAxin1_100")))
+
+for(i in 1:length(datas))
+{
+  cat("\n")
+  cat("### ", "Individual Comparisons")
+  cat("\n")
+
+p <- ggplot(datas[[i]], aes(x=Treatment, y=Divided, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Ratio between FLUC and RLUC", x = "Samples", y = "FLUC / RLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+p <- ggplot(datas[[i]], aes(x=Treatment, y=RLUC, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "RLUC", x = "Samples", y = "RLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+p <- ggplot(datas[[i]], aes(x=Treatment, y=FLUC, fill=Treatment)) + 
+  geom_boxplot() +
+  geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "FLUC", x = "Samples", y = "FLUC") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+print(p)
+
+#  cat("\n")
+#   cat("### ", "Log2")
+#   cat("\n")
+# 
+# p <- ggplot(datas[[i]], aes(x=Treatment, y=Log2, fill=Treatment)) + 
+#   geom_boxplot() +
+#   geom_jitter(shape=16, position=position_jitter(0.2)) +
+#   labs(title = "Log2 Ratio between FLUC and RLUC", x = "Samples", y = "FLUC / RLUC") +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+# print(p)
+#   
+
+}
+
+
+
+#### Make Foldchanges between samples
+
+# between transIT and 0
+compare = list( "APC 50 ng/mL vs APC" = c("APC_50", "APC"),
+                "APC vs Control" = c("APC", "px459_p1"),
+                "Topflash vs Control" = c("Topflash", "px459_p1"),
+                "CSNK1A1 vs Control" = c("CSNK1A1","px459_p1"),
+                "B4GALT6 vs Control" = c("B4GALT6", "px459_p1"),
+                "B4GALT6 Wnt vs Control Wnt" = c("B4GALT6_50", "px459_p1_50"),
+                "CFC1 vs Control" = c("CFC1", "px459_p1"),
+                "CFC1 Wnt vs Control Wnt" = c("CFC1_50", "px459_p1_50"),
+                "GDE1 vs Control" = c("GDE1", "px459_p1"),
+                "GDE1 Wnt vs Control Wnt" = c("GDE1_50", "px459_p1_50"),
+                "PLGRKT vs Control" = c("PLGRKT", "px459_p1"),
+                "PLGRKT Wnt vs Control Wnt" = c("PLGRKT_50", "px459_p1_50"),
+                "IDO1 vs Control" = c("IDO1", "px459_p1"),
+                "IDO1 Wnt vs Control Wnt" = c("IDO1_50", "px459_p1_50"),
+                "TTLL4 vs Control" = c("TTLL4", "px459_p1"),
+                "TTLL4 Wnt vs Control Wnt" = c("TTLL4_50", "px459_p1_50")
+                
+                
+                )
+
+comparedata <- list()
+
+for(i in 1:length(compare))
+{
+   comparedata[i] <- list( 
+    data.frame("Name" = i,
+               stringsAsFactors = FALSE)
+  )
+   data1 <- dplyr::filter(plot$data, Treatment %in% c(compare[[i]][1]))$Divided
+   data2 <- dplyr::filter(plot$data, Treatment %in% c(compare[[i]][2]))$Divided
+   comparedata[[i]]$median = median(data1) / median(data2)
+   
+   comparedata[[i]]$low <- (median(data1) - sd(data1, na.rm = TRUE)) / (median(data2) + sd(data2, na.rm = TRUE))
+   comparedata[[i]]$high <- (median(data1) + sd(data1, na.rm = TRUE)) / (median(data2) - sd(data2, na.rm = TRUE))
+     #median(comparedata[[i]]$median) + sd(comparedata[[i]]$median, na.rm = TRUE)
+   
+   
+   #comparedata[[i]]$median <- median(comparedata[[i]]$median)
+   #comparedata[[i]] <- unique(comparedata[[i]])
+
+}  
+
+names(comparedata) <- names(compare)
+
+    hc2 <- highcharter::highchart() %>%
+    highcharter::hc_chart(zoomType = "xy") %>%
+    highcharter::hc_chart(type = "column") %>% 
+    highcharter::hc_title(text = "Foldchange") %>%
+    #highcharter::hc_subtitle(text = paste("between ", paste(compare[[i]], collapse = " and "))) %>%
+    #highcharter::hc_xAxis(categories = list(unlist(names(comparedata)) ) ) %>%
+    highcharter::hc_yAxis(title = list(text = "Median Foldchange")) %>%
+    highcharter::hc_legend(enabled = TRUE) %>%
+    highcharter::hc_exporting(enabled=TRUE)
+    for(i in 1:length(comparedata))
+    {
+      hc2 <- highcharter::hc_add_series(hc2, name = names(comparedata)[i], data = comparedata[[i]]$median)
+    }
+    
+    
+    hc3 <- highcharter::highchart() %>% 
+    highcharter::hc_title(text = "Median Foldchange") %>%
+    highcharter::hc_subtitle(text = "with minimum and maximum calculations") %>%
+    highcharter::hc_xAxis(categories = c("",names(comparedata))) %>%
+    highcharter::hc_yAxis(title = list(text = "Median Foldchange +- min/max")) %>%
+    highcharter::hc_legend(enabled = FALSE) %>%
+    highcharter::hc_chart(zoomType = "xy") %>%
+    highcharter::hc_exporting(enabled=TRUE)
+    
+    for(i in 1:length(comparedata))
+    {
+      colnames(comparedata[[i]]) <- c("x","y", "low", "high")
+      hc3 <- highcharter::hc_add_series(hc3, data = comparedata[[i]],
+                type = "errorbar", color = "grey", stemWidth = 3,  whiskerLength = 20, name = names(comparedata)[i])
+      hc3 <- highcharter::hc_add_series(hc3, data = comparedata[[i]][,c("x","y")], color = "black", marker = list(radius = 5, symbol = "square"), name = names(comparedata)[i])
+    }
+    
+    
+      hc3
+hc2
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

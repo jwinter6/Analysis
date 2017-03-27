@@ -8,6 +8,7 @@ output: html_notebook
 ```{r loaddata}
 
 library(qpcR)
+library(HTqPCR)
 library(tibble)
 library(readr)
 library(dplyr)
@@ -20,8 +21,15 @@ library(ggplot2)
 # this needs to be renamed in interface to the actual sample name, and then replaced in the Dataset
 
 # ##Inputs:
-# sample list
-samplelist <- list("Sample1" = "1", "Sample2" = "2", "Sample3" = "3", "Sample4" = "4")
+# sample list (will be calculated from XLSX file below)
+samplelist <- list("1" = "Sample1", "2" = "Sample2", "3" = "Sample3", "4" = "Sample4")
+
+# type of Cq calculation method
+## must be one of: cpD2 (default), cpD1 or Cy0
+cq_calc_method = "Cy0"
+
+# was a robot used to pipet the plate?
+robot <- TRUE
 
 #qPCR rawdata
 file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/data/JW_20170321_qPCR_TestPrimer.txt"
@@ -32,7 +40,9 @@ file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TES
 
 # read file data 
 file.read <- readr::read_tsv(file = file, col_names = c("SamplePos","SampleName","Prog","Seg","Cycle","Time","Temp","483-533"), skip = 2)
-
+# make A1 to A01 to be consistent
+#pattern <- expression("^(\\w{1})(\\d{1})$")
+#file.read$SamplePos <- sub(pattern = pattern, replacement = paste("\\1","0","\\2", sep=""), x=  file.read$SamplePos, fixed = FALSE )
 
 # convert to qpcR format flat file
 ## each row -> CYCLE
@@ -42,13 +52,12 @@ file.read <- readr::read_tsv(file = file, col_names = c("SamplePos","SampleName"
 df.pcr <- tibble::tibble("Cycles" = seq(from = min(file.read[,"Cycle"]), to = max(file.read[,"Cycle"]), by =1))
 
 ## Add names (unique ones of course) as columns, so we first make data frame for each Well that contains cycles 1-x and the 483-533 value
+wells <- NULL
 
 wells <- as.list(unique(file.read$SamplePos))
 names(wells) <- unique(file.read$SamplePos)
 
-
 #dplyr::filter(file.read, SamplePos == "A1" & Prog == 2)  %>% dplyr::select(2,3, 5, 8)
-
 
 df.data <- lapply(wells, function(x){
   # get subset
@@ -66,7 +75,7 @@ df.data <- NULL
 # df.pcr will store all information in a flat-file way for qPCR anakysis
 # rows -> cycles
 # columns <- wells
-df.pcr
+ncol(df.pcr)
 
 
 
@@ -81,7 +90,7 @@ df.data <- lapply(wells, function(x){
   subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 3)  %>% dplyr::select( 7, 8)
   # Get column 483-533
   #subset <- dplyr::select(subset, 5, 8)
-  colnames(subset) <- c("Temp",as.character(x))
+  colnames(subset) <- c("Temp", as.character(x))
   # Add to tibble
   df.melting <<- dplyr::left_join(df.melting, subset, by = "Temp")
   return(subset)
@@ -95,33 +104,54 @@ df.data <- lapply(wells, function(x){
 # df.melting -> flat-file qPCR melting curve data (temp vs fluorescence)
 
 # load annotation data
-
-xlsx_mastermix <- openxlsx::read.xlsx(file_xlsx, sheet = "Mastermix")
-xlsx_primer <- openxlsx::read.xlsx(file_xlsx, sheet = "cDNA")
-xlsx_overview <- as.data.frame(openxlsx::read.xlsx(file_xlsx, sheet = "qPCR Overview", colNames = TRUE, rowNames = TRUE), stringsAsFactors = FALSE)
-
-
-# Replace Sample with user names
-  
-  for(i in 1:length(samplelist))
-  {
-    xlsx_mastermix$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_mastermix$Sample)
-    xlsx_primer$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_primer$Sample)
-  }
+if(robot)
+{
+  xlsx_mastermix <- openxlsx::read.xlsx(file_xlsx, sheet = "Mastermix")
+  xlsx_primer <- openxlsx::read.xlsx(file_xlsx, sheet = "cDNA")
+  xlsx_overview <- as.data.frame(openxlsx::read.xlsx(file_xlsx, sheet = "qPCR Overview", colNames = TRUE, rowNames = TRUE), stringsAsFactors = FALSE)
+} else {
+  xlsx_overview <- as.data.frame(openxlsx::read.xlsx(file_xlsx, sheet = "qPCR Overview", colNames = TRUE, rowNames = TRUE), stringsAsFactors = FALSE)
+}
 
 # get Overview plate first
 
 overview_plate <- list()
 overview_plate$overview <- reshape2::melt(as.matrix(xlsx_overview))
 pattern <- expression("^(\\d{1})$")
-overview_plate$overview$Var2 <- sub(pattern = pattern, replacement = paste("0","\\1", sep=""), x=  overview_plate$overview$Var2, fixed = FALSE )
+#overview_plate$overview$Var2 <- sub(pattern = pattern, replacement = paste("0","\\1", sep=""), x=  overview_plate$overview$Var2, fixed = FALSE )
 overview_plate$overview$position <- paste0(overview_plate$overview$Var1, overview_plate$overview$Var2)
 
-## make ggplot2 image
 platemap <- dplyr::mutate(as.data.frame(overview_plate$overview),
                    Row=as.numeric(match(toupper(substr(position, 1, 1)), LETTERS)),
                    Column=as.numeric(substr(position, 2, 5)))
-g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
+
+# Replace Sample with user names
+# Replace Sample by stoff from List that user gives
+  
+  samplelist <- list()
+  if(!robot)
+  {
+    samplelist <- as.list(unique(overview_plate$overview$value))
+    names(samplelist) <- unique(overview_plate$overview$value)
+  } else {
+    samplelist <- as.list(unique(xlsx_mastermix$Sample))
+    names(samplelist) <- unique(xlsx_mastermix$Sample)
+    
+    # name will stay old, but character will be the new name
+  
+    for(i in 1:length(samplelist))
+   {
+      xlsx_mastermix$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_mastermix$Sample)
+      xlsx_primer$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_primer$Sample)
+    }
+  }
+
+  
+
+
+## make ggplot2 image ov overview plate
+  plot_platemap_overview <- function(data=NA){
+   g <- ggplot2::ggplot(data=data, aes(x=Column, y=Row)) +
     geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
                color="grey90", fill="white", shape=21, size=6) +
     geom_point(aes(color=value), size=6) +
@@ -129,9 +159,12 @@ g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
     scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
     scale_x_continuous(breaks=seq(1, 24)) +
   scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
-    labs(title="Overview plate: Target Genes") 
-  
-  print(g)
+    labs(title="Overview plate") 
+   
+   print(g)
+  }
+
+
 
 
   
@@ -141,21 +174,40 @@ g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
   # - reference gene location
   
   
-  # load MASTERMIX sheet, which contains the Sample information and the layout where which sample is
+ 
+  platemapMastermix <- NA
+  platemapPrimer <- NA
+  
+  if(robot)
+  {
+     # load MASTERMIX sheet, which contains the Sample information and the layout where which sample is
   # Sample = Sample Name
   # Rack.Position = where to pipet from
   # q_PCR_Well_Pos = where to pipet to (final plate)
   #
-  
-  platemapMastermix <- as.data.frame(xlsx_mastermix)
-  platemapMastermix <- dplyr::mutate(platemapMastermix,
+    platemapMastermix <- as.data.frame(xlsx_mastermix)
+    platemapMastermix <- dplyr::mutate(platemapMastermix,
                    Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
                    Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+    
+      # Primer Plate - tells us which target genes
+  # Type = Target gene
+  # Rack.Position = from where it takes the primer set
+  # q_PCR_Plate = to where it pipettes (final plate)
+  # Sample = Sample1 to Sample 4 -> same as in MasterMix Plate
+  # Replicate = Which technical Replicate
+  platemapPrimer <- dplyr::mutate(xlsx_primer,
+                   Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+    
+  }
+  
   
   # Occupiedl well by Samples
   plot_occupied <- function(data = NULL,title="", save=FALSE){
-    
-      g <- ggplot(data=data, aes(x=Column, y=Row)) +
+    if(!is.na(data))
+    {
+       g <- ggplot(data=data, aes(x=Column, y=Row)) +
     geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
                color="grey90", fill="white", shape=21, size=6) +
     geom_point(size=10) +
@@ -165,25 +217,33 @@ g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
     labs(title=title)
       
       return(g)
+    } else {
+      return(NULL)
+    }
+     
   }
   
   plot_target_overview <- function(data=NULL, title="Plate Layout: Target Genes", save=FALSE, samples=FALSE)
   {
-    g <- ggplot(data=data, aes(x=Column, y=Row)) +
-    geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
-               color="grey90", fill="white", shape=21, size=6) 
-    if(samples)
+    if(!is.na(data))
     {
-      g <- g +  geom_point(aes(colour=Sample), size=6) 
-    } else {
-      g <- g + geom_point(aes(colour=Type), size=6) 
-    }
+      g <- ggplot(data=data, aes(x=Column, y=Row)) +
+      geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+                 color="grey90", fill="white", shape=21, size=6) 
+      if(samples)
+      {
+        g <- g +  geom_point(aes(colour=Sample), size=6) 
+      } else {
+        g <- g + geom_point(aes(colour=Type), size=6) 
+      }
+      
+      g <- g + coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+      scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+      scale_x_continuous(breaks=seq(1, 24)) +
+      labs(title=title)
+      return(g)
+    } else {return(NULL)}
     
-    g <- g + coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
-    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
-    scale_x_continuous(breaks=seq(1, 24)) +
-    labs(title=title)
-    return(g)
   }
 
   
@@ -193,15 +253,7 @@ g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
   plot_target_overview(data = platemapMastermix, title = "Plate Layout: Samples", save=FALSE, samples=TRUE)
   
   
-  # Primer Plate - tells us which target genes
-  # Type = Target gene
-  # Rack.Position = from where it takes the primer set
-  # q_PCR_Plate = to where it pipettes (final plate)
-  # Sample = Sample1 to Sample 4 -> same as in MasterMix Plate
-  # Replicate = Which technical Replicate
-  platemapPrimer <- dplyr::mutate(xlsx_primer,
-                   Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
-                   Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+
   
   plot_occupied(data=platemapPrimer,title="Primers were added to the following wells", save=FALSE)
 
@@ -215,9 +267,363 @@ g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
   
   
   
+  
+  ## Plate qPCR RAW cq Value
+  ### DONE LATER
+  
+  
+  # Make df.pcr a nice df with the following stuff:
+  # column names -> SAMPLE-TARGET_X with X being the replicate and SAMPLE being the Sample name as defined, TARGET being the target genes
+  # SAMPLE comes from MASTERMIX, X and TARGET from primer
+  ## STRUCTURE:
+  # SAMPLE-GENE_REPLICATE
+  df_samples <- NULL
+  # make new DF
+  if(robot)
+  {
+    df_samples <- tibble("Position" = xlsx_primer$q_PCR_Well_Pos,
+         "Type" = xlsx_primer$Type,
+         "Replicate" = xlsx_primer$Replicate
+         )
+    
+  # add Sample information from xlsx_mastermix
+  df_samples <- dplyr::left_join(x=df_samples, y = xlsx_mastermix, by=c("Position" = "q_PCR_Well_Pos"))
+  
+  df_samples$SampleFinal <-  apply(df_samples,1, function(x) {
+      sample <- x[["Sample"]]
+      replicate = x[["Replicate"]]
+      gene = x[["Type"]]
+      return(paste(sample,"-", gene, sep=""))
+    })
+    
+  } else {
+    df_samples <- tibble("Position" = overview_plate$overview$position,
+         "Type" = overview_plate$overview$value,
+         "Replicate" = overview_plate$overview$position
+         )
+    
+    df_samples$SampleFinal <-  apply(df_samples,1, function(x) {
+      sample <- sub(x = x[["Type"]], pattern = "(.*)_(.*)", replacement = "\\1")
+      replicate = x[["Replicate"]]
+      gene = sub(x = x[["Type"]], pattern = "(.*)_(.*)", replacement = "\\2")
+      return(paste(sample,"-", gene, sep=""))
+    })
+    
+  }
+  
+    
+  
+  # make df.pcr to have included information of samples
+  #test <- df.pcr
+  colnames(df.pcr) <- sub(pattern = "(\\w{1}\\d{1,2}).*", replacement = "\\1" , x = colnames(df.pcr) )
+  
+  #colnames_df.pcr <- colnames(df.pcr)
+  # colnames(df.pcr) <- sapply(colnames(df.pcr), function(x) {
+  #   sample <- dplyr::filter(df_samples, Position == x)$SampleFinal
+  #   if(length(sample ==1))
+  #   {
+  #     return(sample)
+  #   } else {
+  #     return(x)
+  #   }
+  # })
+  # 
+  ncol(df.pcr)
+  
+ 
+str(df.pcr)
+
+```
+
+
+```{r calculate_CQ}
+ncol(df.pcr)
+
+calc <- as.list(colnames(df.pcr[,2:ncol(df.pcr)]))
+names(calc) <- colnames(df.pcr[,2:ncol(df.pcr)])
+#length(colnames(df.pcr))
+length(calc)
+
+for(i in 1:length(calc))
+{
+  x <- names(calc)[i]
+  out <- list()
+  fitted <- try(qpcR::pcrfit(data = as.data.frame(df.pcr), 1, grep(pattern = paste("^",as.character(x),"$" , sep=""),x = colnames(df.pcr) ), model = l4 ))
+  
+  if(class(fitted) == "try-error")
+      {
+        out$fitted <- NA
+        out$efficiency <- NA
+        out$cq <- NA
+      } else {
+    # fitting worked
+        out$fitted <- fitted
+        efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = "Cy0"))
+        if(class(efficiency) == "try-error")
+        {
+          out$efficiency <- NA
+          out$cq <- NA
+        } else {
+
+          out$efficiency <- efficiency
+
+           # Fourth: get calculated Cq or calculate Cq for Cy0
+      if(cq_calc_method == "Cy0")
+      {
+        cq <- try(qpcR::Cy0(object = out$fitted, plot = FALSE))
+        if(class(cq) == "try-error")
+        {
+          cq <- NA
+        } else {
+          out$cq <- cq
+        }
+      } else
+      {
+        out$cq <- out$efficiency[[cq_calc_method]]
+      }
+      }
+
+      }
+  # return
+  calc[[i]] <- out
+}
+  
+  
+plot(calc$A2$fitted)
+calc$A1$efficiency
+
+qpcR::efficiency(calc$A1$fitted, plot=TRUE, type = "Cy0")
+
+#calc
+```
+
+```{r OLDcalculation}
+
+ # Calculation is done FOR ALL SAMPLES taking into account the replicate information!
+  # we will make a list of samples
+  ## TARGET Gene
+  ##  # Sample (Type) <- for each gene a list
+  ##  ## fitted <- will carry the fitting
+  ##  ## cq <- will carry the calculated cq value (user selectable)
+  ##  ## any additional element will be within the list either as separate list or DF or whatever
+  # samples <- list()
+  # samples <- as.list(unique(df_samples$Sample))
+  # names(samples) <- unique(df_samples$Sample)
+  # for (i in 1:length(samples))
+  # {
+  #   samples[[i]] <- unique(as.list(dplyr::filter(df_samples, Sample == names(samples)[i])$Type))
+  #   names(samples[[i]]) <- unique(as.list(dplyr::filter(df_samples, Sample == names(samples)[i])$Type))
+  # }
+  
+  # target <- list()
+  # target <- as.list(unique(df_samples$Type))
+  # names(target) <- unique(df_samples$Type)
+  # for (i in 1:length(target))
+  # {
+  #   target[[i]] <- unique(as.list(dplyr::filter(df_samples, Type == names(target)[i])$Sample))
+  #   names(target[[i]]) <- unique(as.list(dplyr::filter(df_samples, Type == names(target)[i])$Sample))
+  # }
+  
+  # make factorizing for target/sample combination
+  #vals <- colnames(df.pcr)[2:length(colnames(df.pcr))]
+  #vals2 <- sub(pattern = "(.+)_", replacement = "\\1",x = vals)
+  # SampleCombination is xxxx-xxxx_ and replicate is _y
+  
+  # # MODLIST usage first
+  # qpcr_all_analysis <- qpcR::modlist(x = df.pcr, model=l4, check = NULL, remove="none", labels = colnames(vals))
+  # qpcr_analysis <-  qpcR::replist(qpcr_all_analysis, group = gl(length(qpcr_all_analysis)/3, 3), check = "uni2", remove="KOD", names = "first")
+  # 
+  
+
+  # Run analysis based on
+  ## TARGET
+  # get columns for each target
+ 
+  # #length_reps <- seq.int(from = 1, to = length(df_samples$Type), by=1)
+  # for(i in 1:length(target))
+  # {
+  #   print(target[i])
+  #   # now go for each sample
+  #   for(u in 1:length(target[[i]]))
+  #   {
+  #     
+  #     print(target[[i]][u])
+  #     # pattern for this particular combination, find where the combination is in the 384 well plate
+  #     pattern <- paste(names(target[[i]])[u],"-", names(target)[i], ".*", sep="")
+  #     # First: Perform a fit for EACH SAMPLE (replicate)
+  #     target[[i]][[u]] <- list()
+  #     fitted <- try(qpcR::pcrfit(data = as.data.frame(df.pcr), 1, grep(pattern = pattern,x = colnames(df.pcr) ), model = l4 ))
+  #     if(class(fitted) == "try-error")
+  #     {
+  #       target[[i]][[u]]$fitted <- NA
+  #       target[[i]][[u]]$efficiency <- NA
+  #       target[[i]][[u]]$cq <- NA
+  #     } else {
+  #       
+  #       target[[i]][[u]]$fitted <- fitted
+  #       efficiency = try(qpcR::efficiency(target[[i]][[u]]$fitted, plot=FALSE, type = cq_calc_method))
+  #       if(class(efficiency) == "try-error")
+  #       {
+  #         target[[i]][[u]]$efficiency <- NA
+  #         target[[i]][[u]]$cq <- NA
+  #       } else {
+  #         
+  #         target[[i]][[u]]$efficiency <- efficiency
+  #       
+  #          # Fourth: get calculated Cq or calculate Cq for Cy0
+  #     if(cq_calc_method == "Cy0")
+  #     {
+  #       cq <- try(qpcR::Cy0(object = target[[i]][[u]]$fitted, plot = FALSE))
+  #       if(class(cq) == "try-error")
+  #       {
+  #         cq <- NA
+  #       } else {
+  #         target[[i]][[u]]$cq <- cq
+  #       }
+  #     } else 
+  #     {
+  #       target[[i]][[u]]$cq <- target[[i]][[u]]$efficiency[[cq_calc_method]]
+  #     }
+  #     }
+  #         
+  #     }
+  #       
+  #    
+  #     # Second: Plot Fits
+  #     #plot(target[[i]][[u]]$fitted)
+  #     #plot(target[[i]][u]$fitted)
+  #     # Third: Plot PCR Efficiency
+  #    
+  #     
+  #     
+  #   }
+  # }
+
+  
+  # write this back in a DF for HTQPCR for further analysis
+  
+#str(target)
+#plot(target[[i]][[u]]$fitted)
+#str(target[[i]][[u]]$efficiency)
+#str(target[[i]][[u]]$cq)
+
+```
+
+
+
+```{r MeltingCurve}
+
+str(df.melting)
+
+
+
+```
+
+
+```{r htqpcr1}
+# write calc list wiht all cq values to a tibble for htqpcr
+cq <- lapply(calc,function(x){
+  return(x[["cq"]])
+})
+cq_df <- as.data.frame(t(as.data.frame(cq)))
+cq_df$Position <- rownames(cq_df)
+colnames(cq_df) <- c("Cq", "Position")
+df_samples <- dplyr::left_join(x=df_samples, y=cq_df, by="Position")
+
+
+
+
+
+
+df_samples
+
+```
+
+
+```{r Plots}
+
+########## PLATE QC and OVERVIEW
+
+plot_platemap_overview(data=platemap)
+
+## ONLY AVAILABLE IF ROBOT ==TRUE
+## occupied wells acccording to mixing
+plot_occupied(data=platemapMastermix,title="Mastermix was added to the following wells", save=FALSE)
+
+plot_target_overview(data = platemapMastermix, title = "Plate Layout: Samples", save=FALSE, samples=TRUE)
+  
+plot_occupied(data=platemapPrimer,title="Primers were added to the following wells", save=FALSE)
+
+## Plot Target genes according to robot
+plot_target_overview(data = platemapPrimer, title = "Plate Layout: Target Genes", save=FALSE)
+
+
+
+######### Individual wells
+
+## for each unique sample including three replicates
+## QC ONLY!!
+## user can select a sample and  and plots ar created as QC using the well information FROM SAMPLEFINAL, e.g. combination of sample and target gene
+
+userselect <- "Sample1-ADAM10"
+
+pos <- dplyr::filter(df_samples, SampleFinal == userselect) %>% dplyr::select(Position)
+
+# # plot RAW fluorescences
+# plot_raw <- function(data=NA, pos=NULL)
+# {
+#   if(!is.na(data) && !is.null(pos))
+#   {
+#     for(i in 1:length(pos))
+#     {
+#       plot(data[[pos[i]]]$fitted)
+#     }
+#   } else { return(NULL)}
+# }
+# 
+# plot_raw(calc, pos=pos$Position)
+
+# Plot fitting and cq calculation
+plot_cq_fitted <- function(data=NA, pos=NULL, cq=cq_calc_method)
+{
+  if(!is.na(data) && !is.null(pos) &&!is.na(cq_calc_method))
+  {
+    for(i in 1:length(pos))
+    {
+      qpcR::efficiency(data[[pos[i]]]$fitted, plot=TRUE, type = cq_calc_method)
+    }
+  } else { return(NULL)}
+  
+}
+
+plot_cq_fitted(data=calc, pos=pos$Position, cq = cq_calc_method)
+
+## for each Sample give a overview of all gene
+# cq values
+
+userselect_sample <- "Sample1"
+
+
+
+
+## for each target gene give an overview of all sample
+# cq values
 
 ```
 
 
 
 
+```{r tables}
+
+## Overview table
+
+df_samples
+
+
+## 
+
+
+
+
+```

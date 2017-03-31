@@ -14,6 +14,8 @@ output$luc_xlsx_filename <- renderText({
   )
   return(input$luc_xlsx$name)
 })
+
+
 luc_file_xlsx <- reactive( { #input$submit_luc_xlsx,
   luc_file <- input$luc_xlsx
   
@@ -91,11 +93,50 @@ luc_file_xlsx <- reactive( { #input$submit_luc_xlsx,
     out$plate_rows <- plate_rows 
     out$plate_cols <- plate_cols
     
+    
+    print(str(out$plates))
+    print(str(out$groups))
+    
+    
+    
     return(out)
   }
   
   
 })
+
+
+output$luc_analysis_normalize_select <- renderUI({
+  shiny::validate(
+    shiny::need(luc_file_xlsx, message = "Please upload data.")
+  )
+  selection <- c("none","Plate Median", "Plate Mean")
+  
+  # get samples available on all plates
+  plates <- unique(luc_file_xlsx()$plates)
+  treatments <- unique(luc_file_xlsx()$groups)
+  treatsall <- NULL
+  #for(i in 1:length(plates))
+  # {
+  #   treatplate <- dplyr::filter(luc_file_data()$plot$data, Plate == plates[i]) %>% dplyr::filter(Treatment %in% treatments) %>% dplyr::select(Treatment)
+  #   treatsall <- c(treatsall,treatplate$Treatment)
+  # }
+  
+  # check for samples that are at least x times (for x plates) in the vector
+  output <- NULL
+  # for(i in 1:length(treatments))
+  # {
+  #   if (sum(treatsall == treatments[i]) >= length(plates) )
+  #   {
+  #     output <- c(output, treatments[i])
+  #   }
+  # }
+  
+  selection <- c(selection, unique(output))
+  return(shiny::selectizeInput(inputId = "luc_analysis_input_normalize", label = "Select Samples/Method for normalization" , multiple = TRUE, options = list(maxItems = 1), choices = selection))
+})
+
+
 
 # Luciferase data
 output$luc_data_filename <- renderUI({
@@ -109,6 +150,7 @@ luc_file_data <- reactive({ #input$submit_luc_data,
   shiny::validate(
     shiny::need(!is.null(luc_file_xlsx), message = "Please upload a valid XLSX file first")
   )
+  
   error$luc_data_error <- FALSE
   
   if(is.null(input$luc_data) || input$luc_data =="")
@@ -138,7 +180,9 @@ luc_file_data <- reactive({ #input$submit_luc_data,
     for(i in 1:length(data))
     {
       # filename FLUC
-      file_fluc <- grepl(pattern = paste(".*",names(data)[i], ".*FLUC", sep=""), x = input$luc_data$name )
+      print(names(data)[i])
+      print(input$luc_data$name )
+      file_fluc <- grepl(pattern = paste(".*",names(data)[i], ".*FLUC.*", sep=""), x = input$luc_data$name )
       
       if(any(file_fluc))
       {
@@ -149,7 +193,7 @@ luc_file_data <- reactive({ #input$submit_luc_data,
       } 
       
       # filename RLUC
-      file_rluc <- grepl(pattern = paste(".*",names(data)[i], ".*RLUC", sep=""), x = input$luc_data$name )
+      file_rluc <- grepl(pattern = paste(".*",names(data)[i], ".*RLUC.*", sep=""), x = input$luc_data$name )
       
       if(any(file_rluc))
       {
@@ -318,6 +362,8 @@ luc_file_data <- reactive({ #input$submit_luc_data,
     out$plot <- plot$data
     out$platemap <- platemap
     out$treatmentgroups <- treatmentgroups
+    
+    
     
     return(out)
     
@@ -513,8 +559,9 @@ output$luc_qc_datatable <- renderDataTable({
   
 })
 
-
-## Analysis
+#####################
+############ Analysis
+#####################
 
 output$luc_analysis_plot_rawdata_FLUC <- renderPlot({
   shiny::validate(
@@ -622,6 +669,23 @@ output$luc_analysis_calibrator_select <- renderUI({
 })
 
 
+###### CALCULATE NORMALIZATION AND CREATE A BACKUP!
+
+# Observe the NORMALIZE NOW BUTTON
+# observeEvent(input$luc_do_normalization,{
+#   shiny::validate(
+#     shiny::need(luc_file_data()$plot, message = "No Data Available"),
+#     shiny::need(input$luc_analysis_input_normalize, message = "Please select the normalization method or sample.")
+#   )
+#   shinyjs::disable("luc_do_normalization")
+#   shinyjs::disable("luc_do_reset")
+#   
+#   # make a backup
+#   
+#   
+# })
+
+
 output$luc_analysis_plot_individual_FLUC <- renderPlot({
   shiny::validate(
     shiny::need(luc_file_data()$plot, message = "No Data Available"),
@@ -629,7 +693,7 @@ output$luc_analysis_plot_individual_FLUC <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata)
+  p <- plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -640,7 +704,7 @@ output$DL_luc_analysis_plot_individual_FLUC <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), '_FLUC', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -651,7 +715,7 @@ output$luc_analysis_plot_individual_RLUC <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata)
+  p <- plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -662,7 +726,7 @@ output$DL_luc_analysis_plot_individual_RLUC <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), '_RLUC', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -673,7 +737,7 @@ output$luc_analysis_plot_individual_RATIO <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata)
+  p <- plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -684,7 +748,7 @@ output$DL_luc_analysis_plot_individual_RATIO <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), '_RATIO', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -695,7 +759,7 @@ output$luc_analysis_plot_individual_LOG2RATIO <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata)
+  p <- plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -706,7 +770,7 @@ output$DL_luc_analysis_plot_individual_LOG2RATIO <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), '_LOG2RATIO', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -721,7 +785,7 @@ output$luc_analysis_plot_calibrated_FLUC <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator= input$luc_analysis_input_calibrate)
+  p <- plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator= input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -732,7 +796,7 @@ output$DL_luc_analysis_plot_calibrated_FLUC <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), paste(input$luc_analysis_input_calibrate, collapse = ""), '_FLUC', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator= input$luc_analysis_input_calibrate), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_FLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator= input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -743,7 +807,7 @@ output$luc_analysis_plot_calibrated_RLUC <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate)
+  p <- plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -754,7 +818,7 @@ output$DL_luc_analysis_plot_calibrated_RLUC <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), paste(input$luc_analysis_input_calibrate, collapse = ""), '_RLUC', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RLUC(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -765,7 +829,7 @@ output$luc_analysis_plot_calibrated_RATIO <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate)
+  p <- plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -776,7 +840,7 @@ output$DL_luc_analysis_plot_calibrated_RATIO <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata ,collapse = "-" ), paste(input$luc_analysis_input_calibrate, collapse = ""), '_RATIO', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )
 
@@ -787,7 +851,7 @@ output$luc_analysis_plot_calibrated_LOG2RATIO <- renderPlot({
     
   )
   
-  p <- plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate)
+  p <- plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize)
   
   print(p)
   
@@ -798,6 +862,6 @@ output$DL_luc_analysis_plot_calibrated_LOG2RATIO <- downloadHandler(
     paste('luc_analysis_plot_',paste(input$luc_analysis_input_rawdata, collapse = "-" ), paste(input$luc_analysis_input_calibrate, collapse = ""), '_LOG2RATIO', ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_individual_LOG2RATIO(data = luc_file_data()$plot, groups = input$luc_analysis_input_rawdata, calibrator = input$luc_analysis_input_calibrate, normalize = input$luc_analysis_input_normalize), units="cm", height = 10, width=25, dpi = 600)
   }
 )

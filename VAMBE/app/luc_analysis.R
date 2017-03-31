@@ -34,9 +34,10 @@ tabItem(tabName = "luc_analysis", align = "center",
                                           uiOutput("luc_analysis_rawdata_select")
                                       )
                                       ),
+                                      
 
                         tabBox(width=12,
-                               title = "Raw Data User-Defined",
+                               title = "User-Defined",
                                
                                
                                

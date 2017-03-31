@@ -10,7 +10,7 @@ plot_luc_analysis_plot_rawdata_FLUC <- function(data = luc_file_data()$plot)
     geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "FLUC", x = "Samples", y = "FLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -22,7 +22,7 @@ plot_luc_analysis_plot_rawdata_RLUC <- function(data = luc_file_data()$plot)
     geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "RLUC", x = "Samples", y = "RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -33,7 +33,7 @@ plot_luc_analysis_plot_rawdata_RATIO <- function(data = luc_file_data()$plot)
     geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "FLUC normalized by RLUC", x = "Samples", y = "Ratio FLUC/RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -44,14 +44,13 @@ plot_luc_analysis_plot_rawdata_LOG2RATIO <- function(data = luc_file_data()$plot
     geom_jitter(shape=16, position=position_jitter(0.2)) +
     ggplot2::theme_minimal() +
     labs(title = "Log2 FLUC normalized by RLUC", x = "Samples", y = "Log2 Ratio FLUC/RLUC") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
 
-plot_luc_analysis_plot_individual_FLUC <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL)
+plot_luc_analysis_plot_individual_FLUC <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL, normalize = "none")
 {
-  
     if(!is.null(groups))
     {
       
@@ -80,7 +79,7 @@ plot_luc_analysis_plot_individual_FLUC <- function(data = luc_file_data()$plot, 
         geom_jitter(shape=16, position=position_jitter(0.2)) +
         labs(title = title, x = xlab, y = ylab) +
         ggplot2::theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
       return(p)
       
     } else {
@@ -90,7 +89,7 @@ plot_luc_analysis_plot_individual_FLUC <- function(data = luc_file_data()$plot, 
  
 }
 
-plot_luc_analysis_plot_individual_RLUC <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL)
+plot_luc_analysis_plot_individual_RLUC <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL, normalize = "none")
 {
 
     if(!is.null(groups))
@@ -123,7 +122,7 @@ plot_luc_analysis_plot_individual_RLUC <- function(data = luc_file_data()$plot, 
         geom_jitter(shape=16, position=position_jitter(0.2)) +
         labs(title = title, x = xlab, y = ylab) +
         ggplot2::theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
       return(p)
      
     } else {
@@ -134,7 +133,7 @@ plot_luc_analysis_plot_individual_RLUC <- function(data = luc_file_data()$plot, 
   
 }
 
-plot_luc_analysis_plot_individual_RATIO <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL)
+plot_luc_analysis_plot_individual_RATIO <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL, normalize = "none")
 {
  
     if(!is.null(groups))
@@ -166,7 +165,7 @@ plot_luc_analysis_plot_individual_RATIO <- function(data = luc_file_data()$plot,
         geom_jitter(shape=16, position=position_jitter(0.2)) +
         labs(title = title, x = xlab, y = ylab) +
         ggplot2::theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
       return(p)
      
     } else {
@@ -175,7 +174,7 @@ plot_luc_analysis_plot_individual_RATIO <- function(data = luc_file_data()$plot,
 
 }
 
-plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL)
+plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$plot, groups = NULL, calibrator = NULL, normalize = "none")
 {
     if(!is.null(groups))
     {
@@ -209,7 +208,7 @@ plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$p
         geom_jitter(shape=16, position=position_jitter(0.2)) +
         labs(title = title, x = xlab, y = ylab) +
         ggplot2::theme_minimal() +
-        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
       return(p)
       
       

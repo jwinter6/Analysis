@@ -16,9 +16,9 @@ RLUC is considered as the normalization signal, e.g. cell number, whereas FLUC c
 
 ```{r, echo=FALSE, warning=FALSE, message=FALSE}
 # Path yo XLS and assay files
-path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/Assays/2016-12-03_HEKTCF-HCT116_Luc-check/"
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/Assays/2017-03-21_Round1_1/2017-03-21_HEK-HCT_Round1_1.xlsx"
 # Name of XLS sheet
-excel.sheet <- file.path(path,"2016-12-03_HEKTCF-HCT116.xlsx")
+excel.sheet <- file.path(path,"2017-03-21_HEK-HCT_Round1_1.xlsx")
 
 # Name of Assay files
 ## Must be named like:
@@ -209,7 +209,37 @@ plot$data$Log2 <- sapply(plot$data$Log2, function(x){
   
   
 
-
+## Normalize
+normalize=TRUE
+if(normalize)
+{
+  
+  # get samples available on all plates
+  plates <- unique(plot$data$Plate)
+  treatments <- unique(plot$data$Treatment)
+  treatsall <- NULL
+  for(i in 1:length(plates))
+  {
+    treatplate <- dplyr::filter(plot$data, Plate == plates[i]) %>% dplyr::filter(Treatment %in% treatments) %>% dplyr::select(Treatment)
+    treatsall <- c(treatsall,treatplate$Treatment)
+  }
+  
+  # check for samples that are at least x times (for x plates) in the vector
+  output <- NULL
+  for(i in 1:length(treatments))
+  {
+    if (sum(treatsall == treatments[i]) >= length(plates) )
+    {
+      output <- c(output, treatments[i])
+    }
+  }
+  
+  
+  method <- "Plate Median"
+  
+  
+  
+}
   
   
 ```

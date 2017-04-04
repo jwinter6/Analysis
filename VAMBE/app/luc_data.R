@@ -15,15 +15,15 @@ tabItem(tabName = "luc_data", align = "center",
                             shiny::tags$br(),
                             shiny::tags$h4("Uploaded Files"),
                             uiOutput("luc_xlsx_error"),
-                            textOutput("luc_xlsx_filename"),
+                            textOutput("luc_xlsx_filename")#,
                             
                             
-                            
-                            column(width=10, offset=1,
-                                   box(width=12, solidHeader = TRUE, collapsible = FALSE, status="primary", title = "Please choose the plate normalization method",
-                                       uiOutput("luc_analysis_normalize_select")
-                                   )
-                            )
+                            # 
+                            # column(width=10, offset=1,
+                            #        box(width=12, solidHeader = TRUE, collapsible = FALSE, status="primary", title = "Please choose the plate normalization method",
+                            #            uiOutput("luc_analysis_normalize_select")
+                            #        )
+                            # )
                             
                         ),
                         box(width=6, title = "Upload the Luciferase Readout Files", solidHeader = TRUE, collapsible = FALSE, status="primary",

@@ -22,7 +22,7 @@ library(ggplot2)
 
 # ##Inputs:
 # sample list (will be calculated from XLSX file below)
-samplelist <- list("1" = "Sample1", "2" = "Sample2", "3" = "Sample3", "4" = "Sample4")
+samplelist <- list("1" = "Sample1", "2" = "Sample2", "3" = "Sample3")
 
 # type of Cq calculation method
 ## must be one of: cpD2 (default), cpD1 or Cy0
@@ -46,6 +46,7 @@ file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Pri
 file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
 
 # read file data 
+## use roche lightcycler defaults
 file.read <- readr::read_tsv(file = file, col_names = c("SamplePos","SampleName","Prog","Seg","Cycle","Time","Temp","483-533"), skip = 2)
 # make A1 to A01 to be consistent
 #pattern <- expression("^(\\w{1})(\\d{1})$")
@@ -342,6 +343,8 @@ str(df.pcr)
 ```
 
 
+# Now calculate the Cq values according to the selectes function
+
 ```{r calculate_CQ, include=FALSE}
 ncol(df.pcr)
 
@@ -370,9 +373,7 @@ for(i in 1:length(calc))
           out$efficiency <- NA
           out$cq <- NA
         } else {
-
           out$efficiency <- efficiency
-
            # Fourth: get calculated Cq or calculate Cq for Cy0
       if(cq_calc_method == "Cy0")
       {
@@ -526,27 +527,42 @@ str(df.melting)
 ```
 
 
+# Put things into HTqPCR data structure
+
 ```{r htqpcr1, include=FALSE}
 # write calc list wiht all cq values to a tibble for htqpcr
 cq <- lapply(calc,function(x){
   return(x[["cq"]])
 })
 cq_df <- as.data.frame(t(as.data.frame(cq)))
+cq_df$V1 <- as.numeric(cq_df$V1)
+
+# FLAG Cq falues as NA for weird values
+# Input: maxCT and minCT for maximum and minum threshold. Everything above/below is set to NA and will be marked as FLAGGED
+
+# input$maxCT <- 35
+# input$minCT <- 5
+maxCT <- 35
+minCT <- 5
+
+cq_df$V1[cq_df$V1 >=maxCT] <- NA
+cq_df$V1[cq_df$V1 <=minCT] <- NA
+
+# Flag
+cq_df$Flag[is.na(cq_df$V1)] <- "undetermined"
+cq_df$Flag[!is.na(cq_df$V1)] <- "Passed"
+
 cq_df$Position <- rownames(cq_df)
-colnames(cq_df) <- c("Cq", "Position")
+cq_df <- tibble::as_tibble(cq_df)
+colnames(cq_df) <- c("Cq", "Flag", "Position")
+
 df_samples <- dplyr::left_join(x=df_samples, y=cq_df, by="Position")
 
 df_samples$Control <- df_samples$Type
 df_samples$Control[df_samples$Control != calibrator] <- "Target"
 df_samples$Control[df_samples$Control == calibrator] <- "Endogenous Control"
 
-# FILTERING STEP
-# input$filterhigh <- 35
-# input$filterlow <- 5
-filterhigh <- 35
-filterlow <- 5
 
-df_samples$Cq[df_samples$Cq >= filterhigh | df_samples$Cq <= filterlow] <- NA
 
 View(df_samples)
 str(df_samples)
@@ -559,37 +575,47 @@ str(df_samples)
 
 # raw
 
-output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control")]
+output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control", "Flag")]
 
 
 
 n_samples <- unique(output_cqdata$Sample)
 n_samples <- n_samples[!is.na(n_samples)]
+n_samples <- tibble::tibble("Files" = n_samples, "Treatment" = n_samples)
 
-n_features <- nrow(dplyr::filter(df_samples, Sample == n_samples[1]) %>% dplyr::select( Position))
+n_features <- nrow(dplyr::filter(df_samples, Sample == n_samples$Files[1]) %>% dplyr::select( Position))
 # 
-for(i in 1:length(n_samples))
+for(i in 1:length(n_samples$Files))
 {
   
   fullplate_df <- NULL
-  pos1 <- dplyr::filter(df_samples, Sample == n_samples[i]) %>% dplyr::select( Position)
+  pos1 <- dplyr::filter(df_samples, Sample == n_samples$Treatment[i]) %>% dplyr::select( Position)
   fullplate_df <- tibble("Position" = pos1$Position)
-  fullplate_df <- dplyr::left_join(fullplate_df, dplyr::filter(output_cqdata, Sample == n_samples[i]))
+  fullplate_df <- dplyr::left_join(fullplate_df, dplyr::filter(output_cqdata, Sample == n_samples$Treatment[i]))
   #fullplate_df <- dplyr::filter(output_cqdata, Sample == n_samples[i]) %>% dplyr::arrange(Type)
-  pos <- dplyr::filter(df_samples, Sample == n_samples[1]) %>% dplyr::select( Position)
+  pos <- dplyr::filter(df_samples, Sample == n_samples$Treatment[1]) %>% dplyr::select( Position)
   fullplate_df$Position <- pos$Position
   # fullplate_df <- dplyr::full_join(fullplate_df, dplyr::select(df_samples, Position), by= "Position")
   fullplate_df <- dplyr::arrange(fullplate_df,Type)
   #readr::write_tsv(x = dplyr::filter(output_cqdata, Sample == n_samples[i]), path = file.path(getwd(), n_samples[i]), col_names = FALSE)
-  readr::write_tsv(x = fullplate_df, path = file.path(getwd(), n_samples[i]), col_names = FALSE)
+  readr::write_tsv(x = fullplate_df, path = file.path(getwd(), n_samples$Treatment[i]), col_names = FALSE)
 }
 
 # config$userDir
 #readr::write_tsv(x = output_cqdata, path = file.path(getwd(), n_samples[1]), col_names = FALSE)
 
 # read back in for htqpcr as qcprdataset
-qPCRraw <- HTqPCR::readCtData(files = n_samples, path=getwd(), column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5), n.features = n_features)
+qPCRraw <- HTqPCR::readCtData(files = n_samples$Files, path=getwd(), column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features)
 # 
+
+## FLAG and FILTER
+qPCRraw <- setCategory(qPCRraw, Ct.max = maxCT, Ct.min = minCT, groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE)
+
+# Show which samples are FLAGGED
+
+
+pData(qPCRraw)
+exprs(qPCRnorm)
 
 #readr::write_tsv(x = output_cqdata, path = file.path(getwd(), "test"), col_names = FALSE)
 
@@ -600,18 +626,19 @@ qPCRraw <- HTqPCR::readCtData(files = n_samples, path=getwd(), column.info = lis
 #sample3.order <- rep(c(n_samples), each = length(unique(df_samples$Type)))
 #qPCRnew2 <- changeCtLayout(sr.norm, sample.order = sample3.order)
 
-plotCtOverview(qPCRraw, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
+#plotCtOverview(qPCRraw, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
 
 #plotCtReps(qPCRraw,card=1, percent=1)
 
-raw.mix <- qPCRraw
-plotCtVariation(raw.mix, variation = "sd", log = TRUE, main = "SD of replicated features", col = "lightgrey")
+plotCtVariation(qPCRraw, variation = "sd", log = TRUE, main = "SD of replicated features", col = "lightgrey")
+plotCtVariation(qPCRraw, variation = "sd", log = TRUE, col = "lightgrey", type = "detail", add.featurenames = TRUE, pch = " ", cex = 1.2)
+plotCVBoxes(qPCRraw,stratify = "type")
 
-raw.variation <- plotCtVariation(raw.mix, type = "detail", add.featurenames = TRUE, pch = " ", cex = 1.2)
 
 # if featureClass or featureType is set
 featureClass(qPCRraw)
 featureCategory(qPCRraw)
+featurePos(qPCRraw)
 #raw.cat <- qPCRraw
 #plotCtCategory(raw.cat)
 #plotCtCategory(raw.cat, stratify = "class")
@@ -626,111 +653,194 @@ featureCategory(qPCRraw)
 
 #### NORMALIZE DATA
 
-?normalizeCtData
 
-g.norm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = 35, deltaCt.genes = c("GAPDH","PGK1"))
 
-plot(exprs(qPCRraw), exprs(g.norm), pch = 20, main = "deltaCT normalisation", col = rep(brewer.pal(6, "Spectral"), each = 96))
+# Normalization can be done by multiple ways
+
+# input: qpcr_normalize_method
+# Values:
+#         deltaCt --> requires deltaCt.genes, a selection of genes (in featureNames) AND Ct.max -> maximum ct value expected
+#         quantile
+#         scale.rankinvariant
+#         norm.rankinvariant
+#         geometric.mean --> Ct.max -> maximum ct value expected
+qPCRnorm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = maxCT, deltaCt.genes = c("GAPDH","PGK1"))
+
+# After normalization, we laso put data into the tidy data frame
+
+#tidy_qpcr <- tibble::as_tibble(fData(qPCRnorm))
+tidy_qpcr <- NULL
+
+# norm in object qPCRnorm, raw in qPCRraw
+
+for(i in 1:length(sampleNames(qPCRnorm)))
+{
+  if(i==1)
+  {
+    # tidy Ct
+    ct <- NULL
+    ct <- tibble::as_tibble(getCt(qPCRraw)[,i])
+    ct$value[ct$value >= maxCT] <- NA
+    ct$value[ct$value <= minCT] <- NA
+    tidy_qpcr <- tibble::as_tibble(fData(qPCRnorm)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnorm)[i], times = nrow(fData(qPCRnorm))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnorm)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnorm)[i])
+    colnames(tidy_qpcr) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
+    
+    # get SD
+    sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
+    colnames(sd) <- c("Gene","NONE","SD")
+    #sd <- dplyr::summarise()
+    tidy_qpcr <- dplyr::left_join(tidy_qpcr, sd[,c("Gene","SD")], by = "Gene")
+    
+  } else
+  {
+    # tidy Ct
+    ct <- NULL
+    tidy_qpcr_temp <- NULL
+    ct <- tibble::as_tibble(getCt(qPCRraw)[,i])
+    ct$value[ct$value >= maxCT] <- NA
+    ct$value[ct$value <= minCT] <- NA
+    
+    tidy_qpcr_temp <- tibble::as_tibble(fData(qPCRnorm)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnorm)[i], times = nrow(fData(qPCRnorm))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnorm)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnorm)[i])
+    
+    colnames(tidy_qpcr_temp) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
+    
+     # get SD
+    sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
+    colnames(sd) <- c("Gene","NONE","SD")
+    #sd <- dplyr::summarise()
+    tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp, sd[,c("Gene","SD")], by = "Gene")
+    
+    tidy_qpcr <- dplyr::bind_rows(tidy_qpcr, tidy_qpcr_temp)
+    
+  }
+}
+
+View(tidy_qpcr)
+
+getCt(qPCRraw)
+getCt(qPCRnorm)
+plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main = "deltaCT normalisation", col = rep(brewer.pal(6, "Spectral"), each = 96))
 
 
 plotCtCor(qPCRraw, main = "Ct correlation")
-plotCtCor(g.norm, main = "Ct correlation")
-plotCtDensity(g.norm)
+plotCtCor(qPCRnorm, main = "Ct correlation")
+plotCtDensity(qPCRraw)
+plotCtDensity(qPCRnorm)
 
 
-plotCtOverview(g.norm, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
-plotCtBoxes(g.norm)
+plotCtOverview(qPCRnorm, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
 
-plotCtScatter(g.norm, cards = c(1, 3), col = "type", diag = TRUE)
-plotCtPairs(g.norm, col = "type", diag = TRUE)
+# Plot BOXES that the CT distribution compared to endogenous control
+plotCtBoxes(qPCRnorm)
 
+# Plot Scatter for similarness of samples
+# user input: Samples, we will use the number in the slot, e.g. 1 and 2
+plotCtScatter(qPCRnorm, cards = c(1, 3), col = "type", diag = TRUE)
+plotCtPairs(qPCRnorm, col = "type", diag = TRUE)
+
+# PCA
 plotCtPCA(qPCRraw)
+plotCtPCA(qPCRraw,features = FALSE)
 
-plotCtHeatmap(qPCRraw, gene.names = "", dist = "euclidean")
-plotCtHeatmap(g.norm, gene.names = "", dist = "euclidean")
+plotCtPCA(qPCRnorm)
+plotCtPCA(qPCRnorm,features = FALSE)
 
-clusterCt(g.norm, type = "samples")
-clusterCt(g.norm, type = "genes")
+# PLot Heatmap
+# Values:
+#         main -> title of plot
+#         dist -> euclidean or pearson (for caluclating distances)
+#         gene.names -> character vector to replace row entries
+#         sample.names -> character vecotr to replace column entries
+plotCtHeatmap(qPCRraw, gene.names = featureNames(qPCRraw), dist = "euclidean")
+plotCtHeatmap(qPCRnorm, gene.names = featureNames(qPCRnorm), dist = "euclidean")
 
-plotCtRQ()
-# get number of genes
-numGenes <- length(unique(df_samples$Type))
-
-# get number of samples
-numSamples <-  length(unique(output_cqdata$Sample))
-
-
-# for(i in 1:length(n_samples))
-# {
-#   if(i == 1)
-#   {
-#     df_temp <- dplyr::filter(df_samples, Sample==n_samples[i]) %>% dplyr::select(Type, Cq)
-#     
-#   } else {
-#     df_temp <- dplyr::bind_cols(df_temp,dplyr::filter(df_samples, Sample==n_samples[i]) %>% dplyr::select(Cq) )
-#     #df_temp <- dplyr::bind_cols(x=df_temp, y = dplyr::filter(df_samples, Sample==n_samples[i]) %>% dplyr::select(Type, Cq), by = c("Genes"="Type") )
-#   }
-#   
-# }
-# colnames(df_temp) <- c("Genes", n_samples)
-# 
-# # Make qPCRset object
-# qPCRraw   <- new("qPCRset",
-#         exprs=as.matrix(dplyr::select(df_temp, 2:(length(n_samples)+1) ))
-#         #featureNames=as.vector(df_temp$Genes)
-#         #sampleNames=n_samples
-#        )
-
-featureNames(qPCRraw) <- df_temp$Genes
-sampleNames(qPCRraw) <- n_samples
-featurePos(qPCRraw) <- df_temp$
-featuretypes <- dplyr::filter(df_samples, Sample == n_samples[1]) %>% dplyr::select(Type)
-featuretypes[featuretypes != calibrator] <- "Target"
-featuretypes[featuretypes == calibrator] <- "Reference Gene"
-
-featureType(qPCRraw) <- featuretypes
+plotCtHeatmap(qPCRraw, gene.names = featureNames(qPCRraw), dist = "pearson")
+plotCtHeatmap(qPCRnorm, gene.names = featureNames(qPCRnorm), dist = "pearson")
 
 
-qPCRraw
+clusterCt(qPCRraw, type = "samples")
+clusterCt(qPCRraw, type = "genes")
 
-slotNames(qPCRraw)
-phenoData(qPCRraw)
-
-pData(qPCRraw)
-featureData(qPCRraw)
-featureType(qPCRraw)
-
-head(fData(qPCRraw))
+clusterCt(qPCRnorm, type = "samples")
+clusterCt(qPCRnorm, type = "genes")
 
 
-getCt(qPCRraw)
-featureNames(qPCRraw)
-sampleNames(qPCRraw)
+## Plot ggplot2 different GENE according to SAMPLE using tidy_qpcr!
+# "Gene"   "Type"   "Pos"    "Sample" "Cqnorm" "Cqraw" "SD"
+
+# INPUT USER
+# genes <- genes to plot
+# NORM or RAW <- will use Cqraw or Cqnorm (no SD)
+# sample <- by default: all, otherwise just the sample
+
+## according to this we will perform a subsetting
+
+# plot RAW
+title <- "Raw Cq Values"
+p <- ggplot(tidy_qpcr, aes(x=Gene, y=Cqraw, fill=Sample)) + 
+    geom_bar(stat="identity", position = "dodge") +
+    geom_errorbar(aes(ymin=Cqraw-SD, ymax=Cqraw+SD),
+                  width=.2,                    # Width of the error bars
+                  position=position_dodge(.9)) +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = title, x = "Genes", y = "Cq values") +
+    ggplot2::theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+p
+
+# Calculate statistical tests
+
+# user input:
+## groups <- which groups to compare
+## calibrator <- which is the calibrator
+
+# ddct --> deltadelta CT
+# FC --> the FOLD CHANGE calculated by ddCT
+
+getCtHistory(qPCRnorm)
+
+## T-Test
+?ttestCtData
+
+ttestCtData(qPCRnorm[,c(1,3)], groups = c(1,3), calibrator = 1, alternative = "two.sided", paired = FALSE, replicates = TRUE, sort = TRUE, stringent = TRUE, p.adjust = "BH")
+
+## Mann-Whitney
+?mannwhitneyCtData
+
+mannwhitneyCtData(qPCRnorm[,c(1,3)], groups = c(1,3), calibrator = 1, alternative = "two.sided", paired = FALSE, replicates = TRUE, sort = TRUE, stringent = TRUE, p.adjust = "BH")
 
 
- 
- # select GENES
- g <- unique(df_samples$Type) #(max 20!)
- # select SAMPLES
- group <- n_samples
- plotCtOverview(qPCRraw, genes = g, groups = group, conf.int = TRUE)
- #?plotCtOverview
- #plotCtOverview(qPCRraw, genes = g, groups = group, calibrator = "Sample1") # calibrator must be sample!
-
- g
- 
-plotCtReps(qPCRraw,card = 1, percent = 10,verbose = TRUE)
-?plotCtReps
 
 
-# Load example data
-data(qPCRraw)
-featureType(qPCRraw)
-# Plot replicates
-plotCtReps(qPCRraw, percent=1)
-plotCtReps(qPCRraw, card=2, percent=10)
-reps <- plotCtReps(qPCRraw, card=2, percent=20)
-reps
+## Limma
+
+?limmaCtData
+
+design <- model.matrix(~0+n_samples$Treatment)
+colnames(design) <- n_samples$Treatment
+
+contrasts <- makeContrasts(Sample2-Sample1, levels=design)
+
+
+# Load example preprocessed data
+data(qPCRpros)
+samples <- read.delim(file.path(system.file("exData", package="HTqPCR"), "files.txt"))
+# Define design and contrasts
+design <- model.matrix(~0+samples$Treatment)
+colnames(design) <- c("Control", "LongStarve", "Starve")
+contrasts <- makeContrasts(LongStarve-Control, LongStarve-Starve, Starve-Control, levels=design)
+# The actual test
+diff.exp <- limmaCtData(qPCRpros, design=design, contrasts=contrasts)
+# Some of the results
+diff.exp[["LongStarve - Control"]][1:10,]
+
+
+
+
+plotCtRQ(qPCRraw)
+
+
+
 
 ```
 

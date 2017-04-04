@@ -90,7 +90,17 @@ tabItem(tabName = "luc_analysis", align = "center",
                                                plotOutput("luc_analysis_plot_calibrated_LOG2RATIO")
                                                
                                       )
-                               )
+                               ),
+                               shiny::tags$br(),
+                               column(width=12,
+                                      box(title = "Calibrated Data as shown in the Plot", solidHeader = TRUE,status="primary",width = 12, collapsible = FALSE,
+                                          shiny::tags$br(),
+                                          dataTableOutput("luc_calibrated_datatable"),
+                                          shiny::tags$br(),
+                                          shiny::tags$br()
+                                          )
+
+                                      )
                                
                         )
                         

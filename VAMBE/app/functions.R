@@ -3,6 +3,9 @@
 #### LUCIFERASE
 
 
+
+
+
 plot_luc_analysis_plot_rawdata_FLUC <- function(data = luc_file_data()$plot)
 {
   p <- ggplot(data, aes(x=Treatment, y=FLUC, fill=Treatment)) + 
@@ -112,7 +115,7 @@ plot_luc_analysis_plot_individual_RLUC <- function(data = luc_file_data()$plot, 
         
       } else {
         data <- dplyr::filter(data, Treatment %in% groups)
-        title  = "FLUC"
+        title  = "RLUC"
         xlab = "Samples"
         ylab = "RLUC"
       }
@@ -183,11 +186,10 @@ plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$p
       
       if(!is.null(calibrator))
       {
-        
         # calibrate to sample
         # divide FLUC by the calibrator
-        
-        data$Log2 <- data$Log2/median(dplyr::filter(data, Treatment %in% calibrator)$Log2, na.rm = TRUE)
+        data$Divided <- data$Divided/median(dplyr::filter(data, Treatment %in% calibrator)$Divided, na.rm = TRUE)
+        data$Log2 <- log2(data$Divided)
         data_cal <- dplyr::filter(data, Treatment %in% calibrator)
         data <- dplyr::filter(data, Treatment %in% groups)
         data <- dplyr::bind_rows(data, data_cal)
@@ -198,7 +200,7 @@ plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$p
         
       } else {
         data <- dplyr::filter(data, Treatment %in% groups)
-        title  = "FLUC"
+        title  = "Log2 Ratio FLUC/RLUC"
         xlab = "Samples"
         ylab = "Log2 Ratio FLUC/RLUC"
       }

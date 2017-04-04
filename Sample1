@@ -1,96 +1,96 @@
-A1	ADAM10	Sample1	23.01	Target
-A2	ADAM10	Sample1	23.47	Target
-A3	ADAM10	Sample1	23.44	Target
-B1	ARMCX1	Sample1	32.12	Target
-B2	ARMCX1	Sample1	32.68	Target
-B3	ARMCX1	Sample1	34.71	Target
-C1	AXIN2	Sample1	22.92	Target
-C2	AXIN2	Sample1	22.99	Target
-C3	AXIN2	Sample1	23.21	Target
-D1	BCL2L2	Sample1	23.73	Target
-D2	BCL2L2	Sample1	23.86	Target
-D3	BCL2L2	Sample1	23.97	Target
-E1	BIRC5	Sample1	26.84	Target
-E2	BIRC5	Sample1	26.55	Target
-E3	BIRC5	Sample1	26.6	Target
-F1	CCND1	Sample1	23.86	Target
-F2	CCND1	Sample1	23.78	Target
-F3	CCND1	Sample1	23.64	Target
-G1	CLDN1	Sample1	28.76	Target
-G2	CLDN1	Sample1	27.92	Target
-G3	CLDN1	Sample1	28.17	Target
-H1	DKK1	Sample1	30.32	Target
-H2	DKK1	Sample1	30.45	Target
-H3	DKK1	Sample1	30.49	Target
-A4	DKK4	Sample1	30.33	Target
-A5	DKK4	Sample1	31.01	Target
-A6	DKK4	Sample1	30.08	Target
-B4	EDN1	Sample1	30.97	Target
-B5	EDN1	Sample1	30.64	Target
-B6	EDN1	Sample1	31.38	Target
-C4	FGFBP	Sample1	33.24	Target
-C5	FGFBP	Sample1	32.99	Target
-C6	FGFBP	Sample1	33.4	Target
-D4	FSCN1	Sample1	23.32	Target
-D5	FSCN1	Sample1	23.61	Target
-D6	FSCN1	Sample1	23.75	Target
-D10	GAPDH	Sample1	18.84	Reference Gene
-D11	GAPDH	Sample1	17.65	Reference Gene
-D12	GAPDH	Sample1	17.82	Reference Gene
-E4	GAST	Sample1	6.77	Target
-E5	GAST	Sample1	NA	Target
-E6	GAST	Sample1	NA	Target
-F10	IPO8	Sample1	22.23	Target
-F11	IPO8	Sample1	22.27	Target
-F12	IPO8	Sample1	22.91	Target
-H4	JUN	Sample1	21.52	Target
-H5	JUN	Sample1	21.62	Target
-H6	JUN	Sample1	21.6	Target
-A7	LAMC2	Sample1	27.9	Target
-A8	LAMC2	Sample1	28.69	Target
-A9	LAMC2	Sample1	28.08	Target
-A10	LEF1	Sample1	22.53	Target
-A11	LEF1	Sample1	22.29	Target
-A12	LEF1	Sample1	22.49	Target
-B7	LGR5	Sample1	26.12	Target
-B8	LGR5	Sample1	26.73	Target
-B9	LGR5	Sample1	26.7	Target
-C7	MYC	Sample1	18.86	Target
-C8	MYC	Sample1	18.57	Target
-C9	MYC	Sample1	19.61	Target
-F4	NEDD9	Sample1	29.81	Target
-F5	NEDD9	Sample1	31.18	Target
-F6	NEDD9	Sample1	30.61	Target
-D7	NOTCH2	Sample1	22.94	Target
-D8	NOTCH2	Sample1	22.72	Target
-D9	NOTCH2	Sample1	22.33	Target
-H10	NTC	Sample1	NA	Target
-H11	NTC	Sample1	NA	Target
-H12	NTC	Sample1	NA	Target
-G10	PGK1	Sample1	21.49	Target
-G11	PGK1	Sample1	21.88	Target
-G12	PGK1	Sample1	21.77	Target
-E10	PPIA	Sample1	23.87	Target
-E11	PPIA	Sample1	25.39	Target
-E12	PPIA	Sample1	26.53	Target
-E7	SGK1	Sample1	27.23	Target
-E8	SGK1	Sample1	27.95	Target
-E9	SGK1	Sample1	28.18	Target
-F7	SOX9	Sample1	25.38	Target
-F8	SOX9	Sample1	25.58	Target
-F9	SOX9	Sample1	25.72	Target
-G7	SP5	Sample1	31.29	Target
-G8	SP5	Sample1	32.01	Target
-G9	SP5	Sample1	32.34	Target
-H7	SUZ12	Sample1	22.88	Target
-H8	SUZ12	Sample1	22.27	Target
-H9	SUZ12	Sample1	22.18	Target
-G4	TCF4	Sample1	23.4	Target
-G5	TCF4	Sample1	24.32	Target
-G6	TCF4	Sample1	24.37	Target
-B10	VEGF	Sample1	22.22	Target
-B11	VEGF	Sample1	22.02	Target
-B12	VEGF	Sample1	22.31	Target
-C10	YAP1	Sample1	22.74	Target
-C11	YAP1	Sample1	22.8	Target
-C12	YAP1	Sample1	22.55	Target
+A1	ADAM10	Sample1	23.01	Target	Passed
+A2	ADAM10	Sample1	23.47	Target	Passed
+A3	ADAM10	Sample1	23.44	Target	Passed
+B1	ARMCX1	Sample1	32.12	Target	Passed
+B2	ARMCX1	Sample1	32.68	Target	Passed
+B3	ARMCX1	Sample1	34.71	Target	Passed
+C1	AXIN2	Sample1	22.92	Target	Passed
+C2	AXIN2	Sample1	22.99	Target	Passed
+C3	AXIN2	Sample1	23.21	Target	Passed
+D1	BCL2L2	Sample1	23.73	Target	Passed
+D2	BCL2L2	Sample1	23.86	Target	Passed
+D3	BCL2L2	Sample1	23.97	Target	Passed
+E1	BIRC5	Sample1	26.84	Target	Passed
+E2	BIRC5	Sample1	26.55	Target	Passed
+E3	BIRC5	Sample1	26.6	Target	Passed
+F1	CCND1	Sample1	23.86	Target	Passed
+F2	CCND1	Sample1	23.78	Target	Passed
+F3	CCND1	Sample1	23.64	Target	Passed
+G1	CLDN1	Sample1	28.76	Target	Passed
+G2	CLDN1	Sample1	27.92	Target	Passed
+G3	CLDN1	Sample1	28.17	Target	Passed
+H1	DKK1	Sample1	30.32	Target	Passed
+H2	DKK1	Sample1	30.45	Target	Passed
+H3	DKK1	Sample1	30.49	Target	Passed
+A4	DKK4	Sample1	30.33	Target	Passed
+A5	DKK4	Sample1	31.01	Target	Passed
+A6	DKK4	Sample1	30.08	Target	Passed
+B4	EDN1	Sample1	30.97	Target	Passed
+B5	EDN1	Sample1	30.64	Target	Passed
+B6	EDN1	Sample1	31.38	Target	Passed
+C4	FGFBP	Sample1	33.24	Target	Passed
+C5	FGFBP	Sample1	32.99	Target	Passed
+C6	FGFBP	Sample1	33.4	Target	Passed
+D4	FSCN1	Sample1	23.32	Target	Passed
+D5	FSCN1	Sample1	23.61	Target	Passed
+D6	FSCN1	Sample1	23.75	Target	Passed
+D10	GAPDH	Sample1	18.84	Endogenous Control	Passed
+D11	GAPDH	Sample1	17.65	Endogenous Control	Passed
+D12	GAPDH	Sample1	17.82	Endogenous Control	Passed
+E4	GAST	Sample1	6.77	Target	Passed
+E5	GAST	Sample1	35.57	Target	Passed
+E6	GAST	Sample1	35.72	Target	Passed
+F10	IPO8	Sample1	22.23	Target	Passed
+F11	IPO8	Sample1	22.27	Target	Passed
+F12	IPO8	Sample1	22.91	Target	Passed
+H4	JUN	Sample1	21.52	Target	Passed
+H5	JUN	Sample1	21.62	Target	Passed
+H6	JUN	Sample1	21.6	Target	Passed
+A7	LAMC2	Sample1	27.9	Target	Passed
+A8	LAMC2	Sample1	28.69	Target	Passed
+A9	LAMC2	Sample1	28.08	Target	Passed
+A10	LEF1	Sample1	22.53	Target	Passed
+A11	LEF1	Sample1	22.29	Target	Passed
+A12	LEF1	Sample1	22.49	Target	Passed
+B7	LGR5	Sample1	26.12	Target	Passed
+B8	LGR5	Sample1	26.73	Target	Passed
+B9	LGR5	Sample1	26.7	Target	Passed
+C7	MYC	Sample1	18.86	Target	Passed
+C8	MYC	Sample1	18.57	Target	Passed
+C9	MYC	Sample1	19.61	Target	Passed
+F4	NEDD9	Sample1	29.81	Target	Passed
+F5	NEDD9	Sample1	31.18	Target	Passed
+F6	NEDD9	Sample1	30.61	Target	Passed
+D7	NOTCH2	Sample1	22.94	Target	Passed
+D8	NOTCH2	Sample1	22.72	Target	Passed
+D9	NOTCH2	Sample1	22.33	Target	Passed
+H10	NTC	Sample1	NA	Target	undetermined
+H11	NTC	Sample1	NA	Target	undetermined
+H12	NTC	Sample1	NA	Target	undetermined
+G10	PGK1	Sample1	21.49	Target	Passed
+G11	PGK1	Sample1	21.88	Target	Passed
+G12	PGK1	Sample1	21.77	Target	Passed
+E10	PPIA	Sample1	23.87	Target	Passed
+E11	PPIA	Sample1	25.39	Target	Passed
+E12	PPIA	Sample1	26.53	Target	Passed
+E7	SGK1	Sample1	27.23	Target	Passed
+E8	SGK1	Sample1	27.95	Target	Passed
+E9	SGK1	Sample1	28.18	Target	Passed
+F7	SOX9	Sample1	25.38	Target	Passed
+F8	SOX9	Sample1	25.58	Target	Passed
+F9	SOX9	Sample1	25.72	Target	Passed
+G7	SP5	Sample1	31.29	Target	Passed
+G8	SP5	Sample1	32.01	Target	Passed
+G9	SP5	Sample1	32.34	Target	Passed
+H7	SUZ12	Sample1	22.88	Target	Passed
+H8	SUZ12	Sample1	22.27	Target	Passed
+H9	SUZ12	Sample1	22.18	Target	Passed
+G4	TCF4	Sample1	23.4	Target	Passed
+G5	TCF4	Sample1	24.32	Target	Passed
+G6	TCF4	Sample1	24.37	Target	Passed
+B10	VEGF	Sample1	22.22	Target	Passed
+B11	VEGF	Sample1	22.02	Target	Passed
+B12	VEGF	Sample1	22.31	Target	Passed
+C10	YAP1	Sample1	22.74	Target	Passed
+C11	YAP1	Sample1	22.8	Target	Passed
+C12	YAP1	Sample1	22.55	Target	Passed

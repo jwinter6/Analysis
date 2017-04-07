@@ -1,6 +1,11 @@
 # saved as functions.R
 
+
+
+
+####################################
 #### LUCIFERASE
+####################################
 
 
 
@@ -17,6 +22,17 @@ plot_luc_analysis_plot_rawdata_FLUC <- function(data = luc_file_data()$plot)
   return(p)
 }
 
+plot_luc_analysis_plot_rawdata_FLUC_plate <- function(data = luc_file_data()$plot)
+{
+  p <- ggplot(data, aes(x=Plate, y=FLUC, fill=Treatment)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "FLUC", x = "Samples", y = "FLUC") +
+    ggplot2::theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  return(p)
+}
+
 
 plot_luc_analysis_plot_rawdata_RLUC <- function(data = luc_file_data()$plot)
 {
@@ -29,6 +45,17 @@ plot_luc_analysis_plot_rawdata_RLUC <- function(data = luc_file_data()$plot)
   return(p)
 }
 
+plot_luc_analysis_plot_rawdata_RLUC_plate <- function(data = luc_file_data()$plot)
+{
+  p <- ggplot(data, aes(x=Plate, y=RLUC, fill=Treatment)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "RLUC", x = "Samples", y = "RLUC") +
+    ggplot2::theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  return(p)
+}
+
 plot_luc_analysis_plot_rawdata_RATIO <- function(data = luc_file_data()$plot)
 {
   p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
@@ -37,6 +64,17 @@ plot_luc_analysis_plot_rawdata_RATIO <- function(data = luc_file_data()$plot)
     labs(title = "FLUC normalized by RLUC", x = "Samples", y = "Ratio FLUC/RLUC") +
     ggplot2::theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  return(p)
+}
+
+plot_luc_analysis_plot_rawdata_RATIO_plate <- function(data = luc_file_data()$plot)
+{
+  p <- ggplot(data, aes(x=Plate, y=Divided, fill=Treatment)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "FLUC normalized by RLUC", x = "Samples", y = "Ratio FLUC/RLUC") +
+    ggplot2::theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
   return(p)
 }
 
@@ -219,3 +257,362 @@ plot_luc_analysis_plot_individual_LOG2RATIO <- function(data = luc_file_data()$p
     }
 
 }
+
+
+###############################
+## QPCR
+###############################
+
+## GGPLOT2 Overview Samples
+plot_platemap_overview <- function(data=NA){
+  g <- ggplot2::ggplot(data=data, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=6) +
+    geom_point(aes(color=value), size=6) +
+    coord_fixed(ratio=(26/24)/(18/16), xlim=c(0.5, 25), ylim=c(0.5, 17)) +
+    scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+    scale_x_continuous(breaks=seq(1, 24)) +
+    scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
+    labs(title="Overview plate") 
+  return(g)
+}
+
+## OVERVIEW TARGET GENES
+plot_target_overview <- function(data=NULL, title="Plate Layout: Target Genes", save=FALSE, samples=FALSE)
+{
+  if(!is.na(data))
+  {
+    g <- ggplot(data=data, aes(x=Column, y=Row)) +
+      geom_point(data=expand.grid(seq(1, 24), seq(1, 16)), aes(x=Var1, y=Var2),
+                 color="grey90", fill="white", shape=21, size=6) 
+    if(samples)
+    {
+      g <- g +  geom_point(aes(colour=Sample), size=6) 
+    } else {
+      g <- g + geom_point(aes(colour=Type), size=6) 
+    }
+    
+    g <- g + coord_fixed(ratio=(13/12)/(9/8), xlim=c(0.5, 24.5), ylim=c(0.5, 16.5)) +
+      scale_y_reverse(breaks=seq(1, 16), labels=LETTERS[1:16]) +
+      scale_x_continuous(breaks=seq(1, 24)) +
+      labs(title=title)
+    return(g)
+  } else {return(NULL)}
+  
+}
+
+## OVERVIEW CQ RAW AND NORMALIZED
+
+plot_cq_overview <- function(data=NA, norm = FALSE, sample=NULL, refgenes=""){
+  data <- as.data.frame(data)
+  if(norm)
+  {
+    selectcol <- "Cqnorm"
+    title <- paste("ddCq values normalized to", paste(refgenes, collapse = ","), "for ", sample, sep= " ")
+    
+    low = "green"
+    high = "red"
+    
+    
+  } else
+  {
+    selectcol <- "Cqraw"
+    title <- paste("Raw Cq values", "for", sample, sep= " ")
+    
+    low = "lightblue"
+    high = "darkblue"
+  }
+  
+  if(is.null(sample))
+  {
+    sampleselect <- 1
+  } else
+  {
+    sampleselect <- sample
+  }
+  data <- dplyr::filter(data, Sample == sampleselect)
+
+  g <- ggplot2::ggplot(data=data, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, max(data$Column)), seq(1, max(data$Row))),aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=9) +
+    geom_point(aes_string(color=selectcol), size=9) +
+    scale_colour_gradient(low=low, high=high) +
+    geom_text(aes_string(label = selectcol), size=2) +
+    coord_fixed(ratio=((max(data$Column)+2)/max(data$Column))/((max(data$Row)+2)/max(data$Row)), xlim=c(0.5, (max(data$Column)+1) ), ylim=c(0.5, (max(data$Row)+1))) +
+    scale_y_reverse(breaks=seq(1, max(data$Row)), labels=LETTERS[1:max(data$Row)]) +
+    scale_x_continuous(breaks=seq(1, max(data$Column))) +
+    #scale_shape_manual(values=seq(from=0, to = length(unique(data$value)), by=1 ) ) +
+    labs(title=title) 
+  
+  return(g)
+}
+
+#####################
+##### Quality Control
+
+#  Normalization
+
+plot_qpcr_normalization <- function(qPCRraw=NULL, qPCRnorm=NULL, refgenes=NULL, samples=FALSE, title=NULL, xlab ="Cq before normalization", ylab="ddCT normalized Cq")
+{
+  if(!is.na(qPCRraw) && !is.na(qPCRnorm) && !is.null(refgenes))
+  {
+    if(!is.null(title)){
+      main <- title
+    } else {
+      main <- paste("ddCT normalization using", paste(refgenes, collapse = ", ") , sep= " ")
+    }
+    ntarget <- length(featureNames(qPCRraw))
+      
+    return(plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main=main,  col = rep(brewer.pal(6, "Spectral"), each = ntarget), xlab=xlab, ylab=ylab))
+    
+  } else {return()}
+  
+}
+
+# sample SD
+
+plot_qpcr_variation <- function(qPCRraw=NULL)
+{
+  if(!is.na(qPCRraw))
+  {
+    return(plotCtVariation(qPCRraw, variation = "sd", log = TRUE, col = "lightgrey", type = "detail", add.featurenames = TRUE, pch = " ", cex = 1.2))
+    
+  } else {return()}
+  
+}
+
+
+# Target quality (determined or ok)
+
+plot_qpcr_determined <- function(qPCRnorm=NULL, title="Status of qPCR wells", ylab ="Number of Wells")
+{
+  if(!is.na(qPCRnorm))
+  {
+    return(plotCtCategory(q = qPCRnorm, stratify = "type", main = title, ylab = ylab))
+    
+  } else {return()}
+  
+}
+
+
+# Density
+
+plot_qpcr_density <- function(qPCRraw = NA, qPCRnorm=NA, refgenes = NA, maxCT = NULL, minCT = NULL)
+{
+  if(!is.na(qPCRraw) && !is.na(qPCRnorm) && !is.na(refgenes))
+  {
+    par(mfrow = c(1,2))
+    # raw data
+    plotCtDensity(qPCRraw,xlab = "Calculated Cq value", ylab = "Density ",main = "Distribution of calculated Cq values")
+    if(!is.null(maxCT))
+    {
+      abline(v = as.numeric(maxCT), lty = 2, col = "red")
+      text(x=as.numeric(maxCT), y = 0.01, labels = "Max Cq Limit", col = "red")
+    }
+    if(!is.null(minCT))
+    {
+      abline(v = as.numeric(minCT), lty = 2, col = "red")
+      text(x=as.numeric(minCT), y = 0.01, labels = "Min Cq Limit", col = "red")
+    }
+    
+    # normalized data
+    plotCtDensity(qPCRnorm,xlab = paste("Calculated ddCT value, normalized to ", paste(refgenes, collapse = "-"), sep=""), ylab = "Density",main = "Distribution of calculated ddCT values")
+    par(mfrow=c(1,1))
+    
+  } else {return()}
+  
+}
+
+
+# CQ Values as Boxplot
+
+plot_qpcr_boxplot_qc <- function(qPCRraw = NA, qPCRnorm=NA, refgenes = NA, maxCT = NULL, minCT = NULL)
+{
+  if(!is.na(qPCRraw) && !is.na(qPCRnorm) && !is.na(refgenes))
+  {
+    par(mfrow = c(1,2))
+    # raw data
+    plotCtBoxes(qPCRraw, stratify = "type",main = "Cq Distribution", ylab = "Calculated Cq" )
+    if(!is.null(maxCT))
+    {
+      abline(h = as.numeric(maxCT), lty = 2, col = "red")
+      text(y=as.numeric(maxCT), x = 1, labels = "Max Cq Limit", col = "red")
+    }
+    if(!is.null(minCT))
+    {
+      abline(h = as.numeric(minCT), lty = 2, col = "red")
+      text(y=as.numeric(minCT), x = 1, labels = "Min Cq Limit", col = "red")
+    }
+    
+    # normalized data
+    plotCtBoxes(qPCRnorm, stratify = "type",main = paste("ddCT Distribution - normalized to ", paste(refgenes, collapse = "-"), sep=""), ylab = "Calculated Cq" )
+    
+    par(mfrow=c(1,1))
+    
+  } else {return()}
+  
+}
+
+
+
+## Pairs
+# Target quality (determined or ok)
+
+plot_qpcr_qc_pairs <- function(qPCRraw = NULL, qPCRnorm=NULL, title="qPCR Sample Correlation", maxCT = "35")
+{
+  if(!is.na(qPCRnorm) && !is.na(qPCRnorm) && !is.na(maxCT))
+  {
+    par(mfrow = c(1,2))
+    plotCtPairs(qPCRraw, col = "type", diag = TRUE, cor = TRUE,Ct.max = maxCT, main = title)
+    plotCtPairs(qPCRnorm, col = "type", diag = TRUE, cor = TRUE,Ct.max = maxCT, main = title)
+    par(mfrow = c(1,1))
+    
+  } else {return()}
+  
+}
+
+
+
+
+##############
+#### CQ CALCULATION
+
+calculate_cq <- function(df.pcr = NULL, cq_calc_method = "Cy0"){
+  
+  calc <- as.list(colnames(df.pcr[,2:ncol(df.pcr)]))
+  names(calc) <- colnames(df.pcr[,2:ncol(df.pcr)])
+  #length(colnames(df.pcr))
+  length(calc)
+  
+  for(i in 1:length(calc))
+  {
+    x <- names(calc)[i]
+    out <- list()
+    fitted <- try(qpcR::pcrfit(data = as.data.frame(df.pcr), 1, grep(pattern = paste("^",as.character(x),"$" , sep=""),x = colnames(df.pcr) ), model = l4 ))
+    
+    if(class(fitted) == "try-error")
+    {
+      out$fitted <- NA
+      out$efficiency <- NA
+      out$cq <- NA
+    } else {
+      # fitting worked
+      
+      out$fitted <- fitted
+      efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = "Cy0", method="spline"))
+      if(class(efficiency) == "try-error")
+      {
+        out$efficiency <- NA
+        out$cq <- NA
+      } else {
+        
+        out$efficiency <- efficiency
+        # Fourth: get calculated Cq or calculate Cq for Cy0
+        if(cq_calc_method == "Cy0")
+        {
+          cq <- try(qpcR::Cy0(object = out$fitted, plot = FALSE))
+          if(class(cq) == "try-error")
+          {
+            cq <- NA
+          } else {
+            out$cq <- cq
+          }
+        } else
+        {
+          out$cq <- out$efficiency[[cq_calc_method]]
+          
+        }
+      }
+      
+    }
+    # return
+    calc[[i]] <- out
+  }
+  return(calc)
+  
+}
+
+
+## get tody data
+qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
+  
+  #tidy_qpcr <- tibble::as_tibble(fData(qPCRnorm))
+  tidy_qpcr <- NULL
+  
+  # norm in object qPCRnorm, raw in qPCRraw
+  
+  for(i in 1:length(sampleNames(qPCRnormobject)))
+  {
+    if(i==1)
+    {
+      # tidy Ct
+      ct <- NULL
+      ct <- tibble::as_tibble( HTqPCR::getCt(qPCRrawobject)[,i])
+      ct$value[ct$value >= maxCT] <- NA
+      ct$value[ct$value <= minCT] <- NA
+      tidy_qpcr <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
+      colnames(tidy_qpcr) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
+      
+      # get SD
+      sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
+      colnames(sd) <- c("Gene","NONE","SD")
+      #sd <- dplyr::summarise()
+      tidy_qpcr <- dplyr::left_join(tidy_qpcr, sd[,c("Gene","SD")], by = "Gene")
+      
+    } else
+    {
+      # tidy Ct
+      ct <- NULL
+      tidy_qpcr_temp <- NULL
+      ct <- tibble::as_tibble(getCt(qPCRrawobject)[,i])
+      ct$value[ct$value >= maxCT] <- NA
+      ct$value[ct$value <= minCT] <- NA
+      
+      tidy_qpcr_temp <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
+      
+      colnames(tidy_qpcr_temp) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
+      
+      # get SD
+      sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
+      colnames(sd) <- c("Gene","NONE","SD")
+      #sd <- dplyr::summarise()
+      tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp, sd[,c("Gene","SD")], by = "Gene")
+      
+      tidy_qpcr <- dplyr::bind_rows(tidy_qpcr, tidy_qpcr_temp)
+      
+      
+    }
+  }
+  
+  # make undetermined NA
+  tidy_qpcr <- dplyr::mutate(tidy_qpcr,
+                                Row=as.numeric(match(toupper(substr(Pos, 1, 1)), LETTERS)),
+                                Column=as.numeric(substr(Pos, 2, 5)) ) 
+  
+  tidy_qpcr$Var1 <- LETTERS[tidy_qpcr$Row]
+  tidy_qpcr$Var2 <- tidy_qpcr$Column
+  
+  tidy_qpcr$Cqnorm <- round(tidy_qpcr$Cqnorm, digits = 2)
+  
+  tidy_qpcr$Cqnorm[tidy_qpcr$Flagged == "Undetermined"] <- NA
+  
+  return(tidy_qpcr)
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

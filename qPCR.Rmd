@@ -31,19 +31,34 @@ cq_calc_method = "Cy0"
 # was a robot used to pipet the plate?
 robot <- TRUE
 
-# cQ filter
-filterhigh <- 35
-filterlow <- 5
+# input$maxCT <- 35
+# input$minCT <- 5
+maxCT <- 35
+minCT <- 5
+
+
+# input: qpcr_normalize_method
+# Values:
+#         deltaCt --> requires deltaCt.genes, a selection of genes (in featureNames) AND Ct.max -> maximum ct value expected
+#         quantile
+#         scale.rankinvariant
+#         norm.rankinvariant
+#         geometric.mean --> Ct.max -> maximum ct value expected
+normalization <- "deltaCt"
+
+# INPUT: refgenes 
+refgenes <- c("GAPDH","PGK1")
 
 # Target gene used as calibrator
 calibrator <- "GAPDH"
 
 #qPCR rawdata
-file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/data/JW_20170321_qPCR_TestPrimer.txt"
-
+#file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/data/JW_20170321_qPCR_TestPrimer.txt"
+file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-01_HEK_px459-APC/data/2017-04-01_JW_FOLLOWUP_HEK_px459-APC.txt"
 
 # XSLX overview file
-file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
+#file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
+file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-01_HEK_px459-APC/2017-04-01qPCR_HEK_px459-APC.xlsx"
 
 # read file data 
 ## use roche lightcycler defaults
@@ -368,6 +383,7 @@ for(i in 1:length(calc))
     # fitting worked
         out$fitted <- fitted
         efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = "Cy0"))
+        #efficiencyLRE = try(qpcR::LRE(out$fitted, plot=FALSE))
         if(class(efficiency) == "try-error")
         {
           out$efficiency <- NA
@@ -522,6 +538,7 @@ qpcR::efficiency(calc$A1$fitted, plot=TRUE, type = "Cy0")
 
 str(df.melting)
 
+qpcR::meltcurve(data = df.melting)
 
 
 ```
@@ -615,7 +632,7 @@ qPCRraw <- setCategory(qPCRraw, Ct.max = maxCT, Ct.min = minCT, groups=NULL, rep
 
 
 pData(qPCRraw)
-exprs(qPCRnorm)
+
 
 #readr::write_tsv(x = output_cqdata, path = file.path(getwd(), "test"), col_names = FALSE)
 
@@ -664,7 +681,9 @@ featurePos(qPCRraw)
 #         scale.rankinvariant
 #         norm.rankinvariant
 #         geometric.mean --> Ct.max -> maximum ct value expected
-qPCRnorm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = maxCT, deltaCt.genes = c("GAPDH","PGK1"))
+# INPUT: refgenes 
+refgenes <- c("GAPDH","PGK1")
+qPCRnorm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = maxCT, deltaCt.genes = refgenes)
 
 # After normalization, we laso put data into the tidy data frame
 
@@ -719,7 +738,7 @@ View(tidy_qpcr)
 
 getCt(qPCRraw)
 getCt(qPCRnorm)
-plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main = "deltaCT normalisation", col = rep(brewer.pal(6, "Spectral"), each = 96))
+plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main = paste("dCT normalization using", paste(refgenes, collapse = ", ") , sep= " "), col = rep(brewer.pal(6, "Spectral"), each = 96))
 
 
 plotCtCor(qPCRraw, main = "Ct correlation")
@@ -731,7 +750,7 @@ plotCtDensity(qPCRnorm)
 plotCtOverview(qPCRnorm, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
 
 # Plot BOXES that the CT distribution compared to endogenous control
-plotCtBoxes(qPCRnorm)
+plotCtBoxes(qPCRnorm,stratify = "type")
 
 # Plot Scatter for similarness of samples
 # user input: Samples, we will use the number in the slot, e.g. 1 and 2
@@ -785,7 +804,7 @@ p <- ggplot(tidy_qpcr, aes(x=Gene, y=Cqraw, fill=Sample)) +
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = title, x = "Genes", y = "Cq values") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
 p
 
 # Calculate statistical tests
@@ -794,10 +813,12 @@ p
 ## groups <- which groups to compare
 ## calibrator <- which is the calibrator
 
-# ddct --> deltadelta CT
+# ddct --> ddCT
 # FC --> the FOLD CHANGE calculated by ddCT
 
 getCtHistory(qPCRnorm)
+
+### ONLY MANN -WHITNEY SEEMS TO WORK
 
 ## T-Test
 ?ttestCtData
@@ -812,28 +833,31 @@ mannwhitneyCtData(qPCRnorm[,c(1,3)], groups = c(1,3), calibrator = 1, alternativ
 
 
 
-## Limma
-
-?limmaCtData
-
-design <- model.matrix(~0+n_samples$Treatment)
-colnames(design) <- n_samples$Treatment
-
-contrasts <- makeContrasts(Sample2-Sample1, levels=design)
-
-
-# Load example preprocessed data
-data(qPCRpros)
-samples <- read.delim(file.path(system.file("exData", package="HTqPCR"), "files.txt"))
-# Define design and contrasts
-design <- model.matrix(~0+samples$Treatment)
-colnames(design) <- c("Control", "LongStarve", "Starve")
-contrasts <- makeContrasts(LongStarve-Control, LongStarve-Starve, Starve-Control, levels=design)
-# The actual test
-diff.exp <- limmaCtData(qPCRpros, design=design, contrasts=contrasts)
-# Some of the results
-diff.exp[["LongStarve - Control"]][1:10,]
-
+# ## Limma
+# 
+# ?limmaCtData
+# 
+# design <- model.matrix(~0+n_samples$Treatment)
+# colnames(design) <- n_samples$Treatment
+# 
+# contrasts <- makeContrasts(Sample2-Sample1, levels=design)
+# # The actual test
+# diff.exp <- limmaCtData(qPCRnorm, design=design, contrasts=contrasts)
+# 
+# 
+# 
+# # Load example preprocessed data
+# data(qPCRpros)
+# samples <- read.delim(file.path(system.file("exData", package="HTqPCR"), "files.txt"))
+# # Define design and contrasts
+# design <- model.matrix(~0+samples$Treatment)
+# colnames(design) <- c("Control", "LongStarve", "Starve")
+# contrasts <- makeContrasts(LongStarve-Control, LongStarve-Starve, Starve-Control, levels=design)
+# # The actual test
+# diff.exp <- limmaCtData(qPCRpros, design=design, contrasts=contrasts)
+# # Some of the results
+# diff.exp[["LongStarve - Control"]][1:10,]
+# 
 
 
 
@@ -904,6 +928,59 @@ plot_cq_fitted <- function(data=NA, pos=NULL, cq=cq_calc_method)
 par(mfrow=c(2,2))
 plot_cq_fitted(data=calc, pos=pos$Position, cq = cq_calc_method)
 
+
+
+## Plate Overview CQ
+
+platemap_cq2 <- dplyr::mutate(tidy_qpcr,
+                   Row=as.numeric(match(toupper(substr(Pos, 1, 1)), LETTERS)),
+                   Column=as.numeric(substr(Pos, 2, 5)) ) 
+
+platemap_cq2$Var1 <- LETTERS[platemap_cq2$Row]
+platemap_cq2$Var2 <- platemap_cq2$Column
+
+platemap_cq2$Cqnorm[platemap_cq2$Flagged == "Undetermined"] <- NA
+
+
+
+plot_cq_overview <- function(data=NA, norm = FALSE, sample=NULL){
+  data <- as.data.frame(data)
+  if(norm)
+  {
+    selectcol <- "Cqnorm"
+  } else
+  {
+    selectcol <- "Cqraw"
+  }
+  
+  if(is.null(sample))
+  {
+    sampleselect <- 1
+  } else
+  {
+    sampleselect <- sample
+  }
+  sampleselect = "Sample1"
+  data <- platemap_cq2
+  data <- dplyr::filter(data, Sample == sampleselect)
+  
+  norm = FALSE
+   g <- ggplot2::ggplot(data=data, aes(x=Column, y=Row)) +
+    geom_point(data=expand.grid(seq(1, max(data$Column)), seq(1, max(data$Row))),aes(x=Var1, y=Var2),
+               color="grey90", fill="white", shape=21, size=9) +
+    geom_point(aes_string(color=selectcol), size=9) +
+    scale_colour_gradient() +
+     geom_text(aes_string(label = selectcol), size=2) +
+    coord_fixed(ratio=((max(data$Column)+2)/max(data$Column))/((max(data$Row)+2)/max(data$Row)), xlim=c(0.5, (max(data$Column)+1) ), ylim=c(0.5, (max(data$Row)+1))) +
+    scale_y_reverse(breaks=seq(1, max(data$Row)), labels=LETTERS[1:max(data$Row)]) +
+    scale_x_continuous(breaks=seq(1, max(data$Column))) +
+  #scale_shape_manual(values=seq(from=0, to = length(unique(data$value)), by=1 ) ) +
+    labs(title="Overview plate") 
+   
+   print(g)
+  }
+
+
 ## for each Sample give a overview of all gene
 # cq values
 
@@ -911,11 +988,86 @@ userselect_sample <- "Sample1"
 
 df_samples
 
-cq_plot <- dplyr::filter(df_samples, Sample == userselect_sample) %>% dplyr::select(Cq)
+cq_plot <- dplyr::filter(df_samples, Sample == userselect_sample) %>% dplyr::select(Cq,Type)
+
+
+
 
 
 ## for each target gene give an overview of all sample
 # cq values
+
+
+
+
+
+############## QC
+
+# Normalization Plot
+plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main = paste("ddCT normalization using", paste(refgenes, collapse = ", ") , sep= " "), col = rep(brewer.pal(6, "Spectral"), each = 96))
+
+
+#plotCtCor(qPCRraw, main = "Cq correlation")
+#plotCtCor(qPCRnorm, main = "Cq correlation")
+
+# Cq variation and Overall quality
+plotCtVariation(qPCRraw, variation = "sd", log = TRUE, main = "SD of replicated features", col = "lightgrey")
+plotCtVariation(qPCRraw, variation = "sd", log = TRUE, col = "lightgrey", type = "detail", add.featurenames = TRUE, pch = " ", cex = 1.2)
+
+plotCtCategory(q = qPCRnorm)
+plotCtCategory(q = qPCRnorm, stratify = "type")
+
+
+# Cq Density Plot
+plotCtDensity(qPCRraw,xlab = "", ylab = "",main = "title")
+plotCtDensity(qPCRnorm, xlab = "", ylab = "",main = "title")
+
+plotCtHistogram(q = qPCRnorm)
+
+
+# Cq Overview along all Samples
+# will be done by ggplot!
+
+#plotCtOverview(qPCRnorm, genes = unique(df_samples$Type), groups = sampleNames(qPCRraw) , conf.int = TRUE)
+
+# Plot BOXES that the CT distribution compared to endogenous control
+plotCtBoxes(qPCRraw, stratify = "type",main = "", ylab = "" )
+plotCtBoxes(qPCRnorm, stratify = "type",main = "", ylab = "" )
+
+# Plot Scatter for similarness of samples
+# user input: Samples, we will use the number in the slot, e.g. 1 and 2
+plotCtScatter(qPCRraw, col = "type", diag = TRUE, cor = TRUE,Ct.max = 35, main ="title")
+plotCtPairs(qPCRraw, col = "type", diag = TRUE, cor = TRUE,Ct.max = 35, main ="title")
+plotCtScatter(qPCRnorm, col = "type", diag = TRUE, cor = TRUE,Ct.max = 35, main ="title", xlab = "xlab", ylab = "ylab")
+plotCtPairs(qPCRnorm, col = "type", diag = TRUE, cor = TRUE,Ct.max = 35, main ="title")
+
+
+
+# PCA
+plotCtPCA(qPCRraw)
+plotCtPCA(qPCRraw,features = FALSE)
+
+plotCtPCA(qPCRnorm)
+plotCtPCA(qPCRnorm,features = FALSE)
+
+# PLot Heatmap
+# Values:
+#         main -> title of plot
+#         dist -> euclidean or pearson (for caluclating distances)
+#         gene.names -> character vector to replace row entries
+#         sample.names -> character vecotr to replace column entries
+plotCtHeatmap(qPCRraw, gene.names = featureNames(qPCRraw), dist = "euclidean")
+plotCtHeatmap(qPCRnorm, gene.names = featureNames(qPCRnorm), dist = "euclidean")
+
+plotCtHeatmap(qPCRraw, gene.names = featureNames(qPCRraw), dist = "pearson")
+plotCtHeatmap(qPCRnorm, gene.names = featureNames(qPCRnorm), dist = "pearson")
+
+
+clusterCt(qPCRraw, type = "samples")
+clusterCt(qPCRraw, type = "genes")
+
+clusterCt(qPCRnorm, type = "samples")
+clusterCt(qPCRnorm, type = "genes",dist = "euclidean")
 
 ```
 

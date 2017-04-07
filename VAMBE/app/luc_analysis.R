@@ -25,7 +25,19 @@ tabItem(tabName = "luc_analysis", align = "center",
                                tabPanel("Log2 Ratio",
                                         downloadButton("DL_luc_analysis_plot_rawdata_LOG2RATIO", label = "Download Plot"),
                                         plotOutput("luc_analysis_plot_rawdata_LOG2RATIO")
-                                        )
+                                        ),
+                               tabPanel( "FLUC PLATE",
+                                         downloadButton("DL_luc_analysis_plot_rawdata_FLUC_plate", label = "Download Plot"),
+                                         plotOutput("luc_analysis_plot_rawdata_FLUC_plate")
+                               ),
+                               tabPanel( "RLUC PLATE",
+                                         downloadButton("DL_luc_analysis_plot_rawdata_RLUC_plate", label = "Download Plot"),
+                                         plotOutput("luc_analysis_plot_rawdata_RLUC_plate")
+                               ),
+                               tabPanel( "Ratio PLATE",
+                                         downloadButton("DL_luc_analysis_plot_rawdata_RATIO_plate", label = "Download Plot"),
+                                         plotOutput("luc_analysis_plot_rawdata_RATIO_plate")
+                               )
                                ),
                         
                         column(width=12,

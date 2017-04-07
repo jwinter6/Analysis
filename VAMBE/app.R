@@ -30,7 +30,8 @@ library(openxlsx)
 library(shinyjs)
 library(shinyBS)
 library(qpcR)
-library(readr)
+library(HTqPCR)
+
 
 
 
@@ -114,6 +115,7 @@ sidebar <- dashboardSidebar(sidebarMenu(
   menuItem("qPCR", tabName = "qpcr", icon = icon("gear"),
            collapsible = TRUE,
            menuSubItem("Upload your Data", tabName = "qpcr_data"),
+           menuSubItem("Check Melting Curves", tabName = "qpcr_melting"),
            menuSubItem("Check Quality", tabName = "qpcr_qc"),
            menuSubItem("Analysis", tabName = "qpcr_analysis")
            #menuSubItem("Set Analysis Parameters", tabName = "settings")
@@ -159,6 +161,7 @@ body <- dashboardBody(
     
     ## qPCR
     source(file.path(config$appDir, "qpcr_data.R"), local = TRUE)$value,
+    source(file.path(config$appDir, "qpcr_melting.R"), local = TRUE)$value,
     source(file.path(config$appDir, "qpcr_qc.R"), local = TRUE)$value,
     source(file.path(config$appDir, "qpcr_analysis.R"), local = TRUE)$value
    
@@ -175,6 +178,33 @@ body <- dashboardBody(
                      column(width=8,offset=2, class="alert alert-danger text-center",
                             shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-exclamation-triangle fa-4x"></i>')),
                             shiny::tags$span(shiny::tags$p(class="lead text-center", "Not Plate or FLUC/RLUC information found in file names. Check for case-sensitivity."))
+                     )
+                   )
+  ),
+  shinyBS::bsModal(id = "qpcr_data_error_modal", title = "Something is wrong with the uploaded files", trigger = "qpcrdataerrormodal", size = "large", 
+                   fluidRow(
+                     style="width:100%;",
+                     column(width=8,offset=2, class="alert alert-danger text-center",
+                            shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-exclamation-triangle fa-4x"></i>')),
+                            shiny::tags$span(shiny::tags$p(class="lead text-center", "Please make sure all files are formatted the right way. Do not use Ct-calculated data from the light cycler!"))
+                     )
+                   )
+  ),
+  shinyBS::bsModal(id = "qpcr_xlsx_error_modal", title = "Something is wrong with the XLSX file", trigger = "qpcrdataerrormodal", size = "large", 
+                   fluidRow(
+                     style="width:100%;",
+                     column(width=8,offset=2, class="alert alert-danger text-center",
+                            shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-exclamation-triangle fa-4x"></i>')),
+                            shiny::tags$span(shiny::tags$p(class="lead text-center", "Oops!",shiny::tags$br(), "Either the XLSX file is not an XLSX file or the worksheet names or its content do not match the formatting criteria."))
+                     )
+                   )
+  ),
+  shinyBS::bsModal(id = "qpcr_data_calc_modal", title = "Calculation Finished", trigger = "qpcrdatacalcmodal", size = "large", 
+                   fluidRow(
+                     style="width:100%;",
+                     column(width=8,offset=2, class="alert alert-success text-center",
+                            shiny::tags$span(style="float:left;padding:10px;", HTML('<i class="fa fa-exclamation-triangle fa-4x"></i>')),
+                            shiny::tags$span(shiny::tags$p(class="lead text-center", "qPCR Calculation has been performed."))
                      )
                    )
   )
@@ -226,6 +256,9 @@ server <- function(input, output, session) {
     # load  Dual luciferase module
   
     # load qPCR module
+  
+  shinyjs::disable("qpcr_start_calculation")
+  
 }
 
 # Run the application 

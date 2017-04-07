@@ -596,6 +596,29 @@ output$DL_luc_analysis_plot_rawdata_FLUC <- downloadHandler(
   }
 )
 
+output$luc_analysis_plot_rawdata_FLUC_plate <- renderPlot({
+  shiny::validate(
+    shiny::need(luc_file_data()$plot, message = "No Data Available")
+  )
+  
+  p <- plot_luc_analysis_plot_rawdata_FLUC_plate(data = luc_file_data()$plot)
+  
+  print(p)
+  
+})
+
+output$DL_luc_analysis_plot_rawdata_FLUC_plate <- downloadHandler(
+  filename = function() {
+    paste('luc_analysis_plot_rawdata_FLUC_PLATE', ".png", sep="")
+  },
+  content = function(con) {
+    
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_FLUC_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+  }
+)
+
+# RLUC
+
 
 output$luc_analysis_plot_rawdata_RLUC <- renderPlot({
   shiny::validate(
@@ -617,6 +640,29 @@ output$DL_luc_analysis_plot_rawdata_RLUC <- downloadHandler(
     ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RLUC(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
   }
 )
+
+output$luc_analysis_plot_rawdata_RLUC_plate <- renderPlot({
+  shiny::validate(
+    shiny::need(luc_file_data()$plot, message = "No Data Available")
+  )
+  
+  p <- plot_luc_analysis_plot_rawdata_RLUC_plate(data = luc_file_data()$plot)
+  
+  print(p)
+  
+})
+
+output$DL_luc_analysis_plot_rawdata_RLUC_plate <- downloadHandler(
+  filename = function() {
+    paste('luc_analysis_plot_rawdata_RLUC_PLATE', ".png", sep="")
+  },
+  content = function(con) {
+    
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RLUC_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+  }
+)
+
+# Ratio
 
 output$luc_analysis_plot_rawdata_RATIO <- renderPlot({
   shiny::validate(
@@ -640,6 +686,31 @@ output$DL_luc_analysis_plot_rawdata_RATIO <- downloadHandler(
     ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RATIO(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
   }
 )
+
+output$luc_analysis_plot_rawdata_RATIO_plate <- renderPlot({
+  shiny::validate(
+    shiny::need(luc_file_data()$plot, message = "No Data Available")
+  )
+  
+  
+  p <- plot_luc_analysis_plot_rawdata_RATIO_plate(data = luc_file_data()$plot)
+  
+  print(p)
+  
+})
+
+
+output$DL_luc_analysis_plot_rawdata_RATIO_plate <- downloadHandler(
+  filename = function() {
+    paste('luc_analysis_plot_rawdata_RATIO_PLATE', ".png", sep="")
+  },
+  content = function(con) {
+    
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RATIO_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+  }
+)
+
+# Log2
 
 output$luc_analysis_plot_rawdata_LOG2RATIO <- renderPlot({
   shiny::validate(

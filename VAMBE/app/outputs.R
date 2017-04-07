@@ -29,3 +29,6 @@ source(file.path(config$appDir, "luciferase.R"), local=TRUE)
 ########################
 #####   qPCR Assay
 ########################
+
+
+source(file.path(config$appDir, "qpcr.R"), local=TRUE)

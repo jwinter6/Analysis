@@ -72,6 +72,24 @@ tabItem(tabName = "qpcr_qc", align = "center",
                                                           # plotpairs
                                                           downloadButton("DL_qpcr_qc_plot_pairs", label = "Download Plot"),
                                                           plotOutput("qpcr_qc_plot_pairs")
+                                                 ),
+                                                 tabPanel("PCA",
+                                                          # plotctpca
+                                                          downloadButton("DL_qpcr_qc_plot_pca", label = "Download Plot"),
+                                                          plotOutput("qpcr_qc_plot_pca")
+                                                 ),
+                                                 tabPanel("Heatmap",
+                                                          # plotctheatmap
+                                                          shiny::selectInput(inputId = "qpcr_qc_heatmap",label = "Please select the distance to determine clusters",choices = c("euclidean","pearson"),selected = "euclidean",multiple = FALSE,width = "30%"),
+                                                          
+                                                          shiny::tags$h4("Cq raw data"),
+                                                          downloadButton("DL_qpcr_qc_plot_heatmap_raw", label = "Download Plot"),
+                                                          plotOutput("qpcr_qc_plot_heatmap_raw",height = "1000px"),
+                                                          shiny::tags$br(),
+                                                          shiny::tags$h4("ddCT normalized"),
+                                                          downloadButton("DL_qpcr_qc_plot_heatmap_norm", label = "Download Plot"),
+                                                          plotOutput("qpcr_qc_plot_heatmap_norm",height = "1000px")
+                                                          
                                                  )
                                           ),
                                           

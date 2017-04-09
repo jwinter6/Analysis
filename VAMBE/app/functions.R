@@ -456,7 +456,6 @@ plot_qpcr_boxplot_qc <- function(qPCRraw = NA, qPCRnorm=NA, refgenes = NA, maxCT
 
 
 ## Pairs
-# Target quality (determined or ok)
 
 plot_qpcr_qc_pairs <- function(qPCRraw = NULL, qPCRnorm=NULL, title="qPCR Sample Correlation", maxCT = "35")
 {
@@ -471,8 +470,217 @@ plot_qpcr_qc_pairs <- function(qPCRraw = NULL, qPCRnorm=NULL, title="qPCR Sample
   
 }
 
+## PCA
+
+plot_qpcr_qc_pca <- function(qPCRraw = NULL, qPCRnorm=NULL)
+{
+  if(!is.na(qPCRnorm) && !is.na(qPCRnorm) && !is.na(maxCT))
+  {
+    par(mfrow = c(1,2))
+    plotCtPCA(qPCRraw,scale = FALSE)
+    plotCtPCA(qPCRnorm,scale = FALSE)
+    par(mfrow = c(1,1))
+    
+  } else {return()}
+  
+}
+
+## Heatmap
+
+plot_qpcr_qc_heatmap <- function(qPCRraw = NULL, qPCRnorm = NULL, title = "", distance = "euclidean")
+{
+   if(!is.null(qPCRraw))
+   {
+     plotCtHeatmap(qPCRraw, gene.names = featureNames(qPCRraw), dist = distance, main = title) 
+   } else {
+     plotCtHeatmap(qPCRnorm, gene.names = featureNames(qPCRnorm), dist = distance, main = title)
+   }
+  
+}
 
 
+###### ANALYSIS
+
+
+plot_qpcr_analysis_CQ <- function(data = tidy_qpcr, target = NULL, yval = "Cqnorm", SD = "SD", refgenes = NULL)
+{
+  if(length(target) == 1)
+  {
+    xval <- "Sample"
+    fillval <- "Gene"
+  } else
+  {
+    xval <- "Gene"
+    fillval <- "Sample" 
+  }
+  
+  # get data
+  data <- dplyr::filter(data, Gene %in% target) %>% na.omit()
+  
+  # set title and axes
+  if(yval == "Cqraw")
+  {
+    title <- "Calculated Cq values"
+    ylab <- "Cq"
+  } else {
+    title <- paste("dCq values normalized to ", paste(refgenes, collapse = ","), sep="")
+    ylab <- "dCq"
+  }
+  
+  # make plot
+  p <- ggplot(data, aes_string(x=xval, y=yval,fill=fillval)) + 
+    geom_bar(stat="identity", position = "dodge", na.rm = TRUE)
+  
+  if(yval == "Cqraw")
+  {
+    p <- p + geom_errorbar(aes(ymin=Cqraw-SD, ymax=Cqraw+SD),
+                           size=.3,    # Thinner lines
+                           width=.2,
+                           position=position_dodge(.9)
+    ) 
+  }
+  if(yval == "Cqnorm")
+  {
+    p <- p + geom_errorbar(aes(ymin=Cqnorm-SD, ymax=Cqnorm+SD),
+                           size=.3,    # Thinner lines
+                           width=.2,
+                           position=position_dodge(.9)
+    ) 
+  }
+  
+  p <- p + ggplot2::theme_minimal() +
+    labs(fill = fillval) +
+    labs(title = title, y = ylab) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  
+  return(p)
+}
+
+
+
+qpcr_get_analysis <- function(tidydata = NULL, samples = NULL, genes = NULL, calibrator = NULL){
+  
+  if(any(is.null(tidydata), is.null(samples), is.null(genes), is.null(calibrator)))
+  {
+    return()
+  }
+  
+  for(i in 1:length(genes))
+  {
+    df_analysis <- NULL
+    df_analysis <- dplyr::filter(tidydata, Sample %in% samples & Gene %in% genes[i])
+    
+    division <- unique(dplyr::filter(tidydata, Sample %in% calibrator & Gene %in% genes[i]) %>% dplyr::select(Cqnorm))
+    
+    df_analysis$ddCq <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      # print(df_tmp)
+      df_tmp$FC <- df_tmp$Cqnorm - division$Cqnorm
+      return(unique(df_tmp$FC))
+      
+    })
+    
+    df_analysis$FC <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      df_tmp$FC <- 2^-(df_tmp$Cqnorm - division$Cqnorm)
+      return(unique(df_tmp$FC))
+      
+    })
+    
+    df_analysis$FCsem <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      df_tmp$FC <- df_tmp$Cqnorm / division$Cqnorm
+      SD <- dplyr::filter(tidydata,  Sample %in% x["Sample"] & Gene %in% gene) %>% dplyr::select(SD)
+      SD <- unique(SD$SD)
+      
+      if(!is.na(SD))
+      {
+        df_tmp$FCsem <- 1-(2^(-(SD) / sqrt(nrow(dplyr::filter(tidydata,  Sample %in% x["Sample"] & Gene %in% gene)))))
+      } else {
+        df_tmp$FCsem <- NA
+      }
+      return(unique(df_tmp$FCsem))
+      
+    })
+    
+    # add to df_analysis if necessary
+    if(i!=1)
+    {
+      df_return <- dplyr::bind_rows(df_return, df_analysis)
+    } else {
+      df_return <- df_analysis
+    }
+    
+  }
+  
+  # return whole tidy dataframe
+  return(df_return)
+  
+}
+
+
+
+plot_qpcr_analysis_calibrated <- function(data = NULL, yval = "FC", samples = NULL, calibrator = NULL, refgenes = NULL)
+{
+  
+  ####
+  # data must be tibble derived by qpcr_get_analysis
+  ####
+  
+  if(any(is.null(data), is.null(samples), is.null(calibrator)))
+  {
+    return()
+  }
+  
+  if(length(unique(data$Gene)) == 1)
+  {
+    xval <- "Sample"
+    fillval <- "Gene"
+  } else
+  {
+    xval <- "Gene"
+    fillval <- "Sample" 
+  }
+  
+  # DATA is already pre-defined by qpcr_get_analysis
+  data <- data %>% na.omit()
+  # set title and axes
+  if(yval == "ddCq")
+  {
+    title <- paste("ddCq calibrated to ", calibrator, sep="")
+    ylab <- "ddCq"
+  } else {
+    title <- paste("Foldchanges calibrated to ", calibrator, sep="")
+    ylab <- "Foldchange"
+  }
+  
+  # make plot
+  p <- ggplot(data, aes_string(x=xval, y=yval,fill=fillval)) + 
+    geom_bar(stat="identity", position = "dodge", na.rm = TRUE)
+  
+  if(yval == "FC")
+  {
+    p <- p + geom_errorbar(aes(ymin=FC-FCsem, ymax=FC+FCsem),
+                           size=.3,    # Thinner lines
+                           width=.2,
+                           position=position_dodge(.9)
+    ) 
+  } else if(yval == "ddCq")
+  {
+    p <- p + geom_errorbar(aes(ymin=ddCq-SD, ymax=ddCq+SD),
+                           size=.3,    # Thinner lines
+                           width=.2,
+                           position=position_dodge(.9)
+    ) 
+  }
+  
+  p <- p + ggplot2::theme_minimal() +
+    labs(fill = fillval) +
+    labs(title = title, y = ylab) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  
+  return(p)
+}
 
 ##############
 #### CQ CALCULATION
@@ -553,12 +761,6 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
       tidy_qpcr <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
       colnames(tidy_qpcr) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
       
-      # get SD
-      sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
-      colnames(sd) <- c("Gene","NONE","SD")
-      #sd <- dplyr::summarise()
-      tidy_qpcr <- dplyr::left_join(tidy_qpcr, sd[,c("Gene","SD")], by = "Gene")
-      
     } else
     {
       # tidy Ct
@@ -571,18 +773,26 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
       tidy_qpcr_temp <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
       
       colnames(tidy_qpcr_temp) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
-      
-      # get SD
-      sd <- aggregate(tidy_qpcr[,c("Gene","Cqraw")], by = list("Gene" = tidy_qpcr$Gene),FUN = "sd")
-      colnames(sd) <- c("Gene","NONE","SD")
-      #sd <- dplyr::summarise()
-      tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp, sd[,c("Gene","SD")], by = "Gene")
-      
+      # add rows of sample
       tidy_qpcr <- dplyr::bind_rows(tidy_qpcr, tidy_qpcr_temp)
-      
       
     }
   }
+  
+  ## add SD
+  ## add SD for each target gene and sample
+  
+  tidy_qpcr$SD <- apply(tidy_qpcr,1, function(x){
+    
+    df_sd <- dplyr::filter(tidy_qpcr, Gene == x["Gene"], Sample == x["Sample"]) %>% dplyr::select(Gene, Cqraw)
+    df_sd$SD <- sd(df_sd$Cqraw, na.rm = TRUE)
+    df_sd$Cqraw <- NULL
+    # bind to tmp
+    #tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp,unique(df_sd),by = "Gene")
+    return(unique(df_sd$SD))
+  })
+
+  
   
   # make undetermined NA
   tidy_qpcr <- dplyr::mutate(tidy_qpcr,
@@ -603,7 +813,72 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
 
 
 
+####### FOLD CHANGE AND SEM calculation
 
+qpcr_get_analysis <- function(tidydata = NULL, samples = NULL, genes = NULL, calibrator = NULL){
+  
+  # remove NA
+  tidydata <- tidydata  %>% na.omit()
+  
+  if(any(is.null(tidydata), is.null(samples), is.null(genes), is.null(calibrator)))
+  {
+    return()
+  }
+  
+  for(i in 1:length(genes))
+  {
+    df_analysis <- NULL
+    df_analysis <- dplyr::filter(tidydata, Sample %in% samples) %>% dplyr::filter(Gene %in% genes[i])
+    
+    division <- unique(dplyr::filter(tidydata, Sample %in% calibrator & Gene %in% genes[i]) %>% dplyr::select(Cqnorm))
+    
+    df_analysis$ddCq <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      # print(df_tmp)
+      df_tmp$FC <- df_tmp$Cqnorm - division$Cqnorm
+      return(unique(df_tmp$FC))
+      
+    })
+    
+    df_analysis$FC <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      df_tmp$FC <- 2^-(df_tmp$Cqnorm - division$Cqnorm)
+      return(unique(df_tmp$FC))
+      
+    })
+    
+    df_analysis$FCsem <- apply(df_analysis, 1, function(x, gene = genes[i]){
+      df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
+      df_tmp$FC <- df_tmp$Cqnorm / division$Cqnorm
+      SD <- dplyr::filter(tidydata,  Sample %in% x["Sample"] & Gene %in% gene) %>% dplyr::select(SD)
+      SD <- unique(SD$SD)
+      
+      if(!is.na(SD))
+      {
+        df_tmp$FCsem <- 1-(2^(-(SD) / sqrt(nrow(dplyr::filter(tidydata,  Sample %in% x["Sample"] & Gene %in% gene)))))
+      } else {
+        df_tmp$FCsem <- NA
+      }
+      return(unique(df_tmp$FCsem))
+      
+    })
+    
+    # add calibrator
+    df_analysis$Calibrator <- calibrator
+    
+    # add to df_analysis if necessary
+    if(i!=1)
+    {
+      df_return <- dplyr::bind_rows(df_return, df_analysis)
+    } else {
+      df_return <- df_analysis
+    }
+    
+  }
+  # return whole tidy dataframe
+  return(df_return)
+  
+}
 
 
 

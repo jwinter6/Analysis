@@ -296,12 +296,28 @@ qpcr_file_data <- reactive({ #input$submit_qpcr_data,
       
     })
     
+    # get real melting stuff
+    for(i in 2:ncol(df.melting))
+    {
+      if(i == 2)
+      {
+        df.melting2 <- dplyr::select(df.melting, Temp, i)
+        colnames(df.melting2) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+      } else {
+        df.binding <- dplyr::select(df.melting, Temp, i)
+        colnames(df.binding) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+        df.melting2 <- dplyr::bind_cols(df.melting2, df.binding) 
+        df.binding <- NULL
+      }
+    }
+    
+    
     
     # Return data structures
     out <- list(
       "success" = TRUE,
       "pcr" = df.pcr,
-      "melting" = df.melting,
+      "melting" = df.melting2,
       "wells" = wells
     )
     shinyjs::enable("qpcr_start_calculation")
@@ -345,7 +361,6 @@ observe(qpcr_file_data())
     shinyjs::disable("qpcr_start_calculation")
     shinyjs::enable("qpcr_reset_calculation")
     
-    print(input$qpcr_cq_method)
     # Calculate CQ
     cq <- calculate_cq(df.pcr = qpcr_file_data()$pcr, cq_calc_method = input$qpcr_cq_method)
     
@@ -730,7 +745,7 @@ output$DL_qpcr_qc_plot_boxes <- downloadHandler(
 output$qpcr_qc_plot_pairs <- renderPlot({
   shiny::validate(
     shiny::need(!is.na(qpcr_data()$qPCRraw), "Please run the calculation"),
-    shiny::need(!is.na(qpcr_data()$qPCRnorm), "Please run the calculation"),
+    shiny::need(!is.na(qpcr_data()$qPCRnorm), "Please run the calculation")
   )
   
   
@@ -749,11 +764,168 @@ output$DL_qpcr_qc_plot_pairs <- downloadHandler(
   }
 )
 
+## PCA
+output$qpcr_qc_plot_pca <- renderPlot({
+  shiny::validate(
+    shiny::need(!is.na(qpcr_data()$qPCRraw), "Please run the calculation"),
+    shiny::need(!is.na(qpcr_data()$qPCRnorm), "Please run the calculation")
+  )
+  
+  plot_qpcr_qc_pca(qPCRraw = qpcr_data()$qPCRraw, qPCRnorm=qpcr_data()$qPCRnorm)
+  
+})
 
-######### INDIVIDUAL PLOTS
+output$DL_qpcr_qc_plot_pca <- downloadHandler(
+  filename = function() {
+    paste('qPCR_QC_PCA' , ".png", sep="")
+  },
+  content = function(con) {
+    png(filename = con,units = "cm", width = 12, height = 8, res = 1200, pointsize = 4)
+    plot_qpcr_qc_pca(qPCRraw = qpcr_data()$qPCRraw, qPCRnorm=qpcr_data()$qPCRnorm)
+    dev.off()
+  }
+)
+
+## Heatmap
+output$qpcr_qc_plot_heatmap_raw <- renderPlot({
+  shiny::validate(
+    shiny::need(!is.na(qpcr_data()$qPCRraw), "Please run the calculation"),
+    shiny::need(!is.na(qpcr_data()$qPCRnorm), "Please run the calculation"),
+    shiny::need(input$qpcr_qc_heatmap, "Please select a distance")
+  )
+  
+  
+  plot_qpcr_qc_heatmap(qPCRraw = qpcr_data()$qPCRraw, qPCRnorm=NULL, distance = input$qpcr_qc_heatmap)
+  
+})
+
+output$qpcr_qc_plot_heatmap_norm <- renderPlot({
+  shiny::validate(
+    shiny::need(!is.na(qpcr_data()$qPCRraw), "Please run the calculation"),
+    shiny::need(!is.na(qpcr_data()$qPCRnorm), "Please run the calculation"),
+    shiny::need(input$qpcr_qc_heatmap, "Please select a distance")
+  )
+  
+  
+  plot_qpcr_qc_heatmap(qPCRraw = NULL, qPCRnorm=qpcr_data()$qPCRnorm, distance = input$qpcr_qc_heatmap)
+  
+})
+
+output$DL_qpcr_qc_plot_heatmap_raw <- downloadHandler(
+  filename = function() {
+    paste('qPCR_QC_heatmap_RAW-',input$qpcr_qc_heatmap  , ".png", sep="")
+  },
+  content = function(con) {
+    png(filename = con,units = "cm", width = 20, height = 10, res = 1200, pointsize = 4)
+    plot_qpcr_qc_heatmap(qPCRraw = qpcr_data()$qPCRraw, qPCRnorm=NULL, distance = input$qpcr_qc_heatmap)
+    dev.off()
+  }
+)
+
+output$DL_qpcr_qc_plot_heatmap_norm <- downloadHandler(
+  filename = function() {
+    paste('qPCR_QC_heatmap_NORM-',input$qpcr_qc_heatmap  , ".png", sep="")
+  },
+  content = function(con) {
+    png(filename = con,units = "cm", width = 20, height = 10, res = 1200, pointsize = 4)
+    plot_qpcr_qc_heatmap(qPCRraw = NULL, qPCRnorm=qpcr_data()$qPCRnorm, distance = input$qpcr_qc_heatmap)
+    dev.off()
+  }
+)
+
+########## MELTING CURVE
+output$qpcr_qc_meltcurve <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload data" ),
+    shiny::need(qpcr_file_data, "Please upload data" ),
+    shiny::need(input$qpcr_input_meltcurve_target, "Please select genes" )
+  )
+  
+  # get well information from qpcr_file_xlsx()$df_samples
+  
+  wells <- dplyr::filter(qpcr_file_xlsx()$df_samples, Type %in% input$qpcr_input_meltcurve_target) %>% dplyr::select(Position)
+
+  # get the column position in qpcr_file_data()$melting
+  wellsmatch <- match(wells$Position ,colnames(qpcr_file_data()$melting))
+  
+  # create plot
+  qpcR::meltcurve(data = as.data.frame(qpcr_file_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
+  
+})
 
 
 
+######### ANALYSIS PLOTS
+
+## Input required: input$qpcr_input_analysis_target, samples, calibrator (see below at INPUTS)
+
+# plot for raw Cq values
+
+
+output$qpcr_analysis_plot_cq <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation")
+  )
+  
+  
+  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, yval = "Cqraw")
+  
+})
+
+output$DL_qpcr_analysis_plot_cq <- downloadHandler(
+  filename = function() {
+    paste('qPCR_Analysis_Cq_', paste(input$qpcr_input_analysis_target, collapse = "-") , ".png", sep="")
+  },
+  content = function(con) {
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, yval = "Cqraw"), units="cm", height = 10, width=25, dpi = 600)
+    
+    
+  }
+)
+
+# plot for ddCT normalized Cq values
+output$qpcr_analysis_plot_ddcq <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation")
+  )
+  
+  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, refgenes = input$qpcr_refgenes, yval = "Cqnorm", refgenes = input$qpcr_refgenes)
+  
+})
+
+output$DL_qpcr_analysis_plot_ddcq <- downloadHandler(
+  filename = function() {
+    paste('qPCR_Analysis_ddCq_', paste(input$qpcr_input_analysis_target, collapse = "-") , ".png", sep="")
+  },
+  content = function(con) {
+    ggplot2::ggsave(filename = con, device= "png" , plot = plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target,refgenes = input$qpcr_refgenes, yval = "Cqnorm"), units="cm", height = 10, width=25, dpi = 600)
+    
+    
+  }
+)
+
+## Input required: input$qpcr_input_analysis_target AND input$qpcr_input_analysis_samples
+
+# plot Fold change
+output$qpcr_analysis_plot_calibrated <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$df_analysis, "Please run the calculation")
+  )
+  
+  plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL)
+  
+})
+
+output$DL_qpcr_analysis_plot_calibrated <- downloadHandler(
+  filename = function() {
+    paste('qPCR_Analysis_Foldchange_', paste(input$qpcr_input_analysis_target, collapse = "-"),"_calibrated-to_", paste(input$qpcr_input_analysis_calibrator, collapse = "") , ".png", sep="")
+  },
+  content = function(con) {
+    ggplot2::ggsave(filename = con, device= "png" , plot =plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL), units="cm", height = 10, width=25, dpi = 600)
+    
+    
+  }
+)
 
 
 ################################
@@ -787,7 +959,7 @@ output$qpcr_xlsx_rawdata <- renderDataTable({
 })
 
 
-## Tody normalized data
+## Tidy normalized data
 output$qpcr_tidydata <- renderDataTable({
   shiny::validate(
     shiny::need(qpcr_data()$tidy, message = "No Data Available")
@@ -807,6 +979,30 @@ output$qpcr_tidydata <- renderDataTable({
   # data
   
   return(DT::datatable(qpcr_data()$tidy, style = "default", class = "display",  options = opts, extensions = ext))
+  
+  
+})
+
+## Tidy calibrated data
+output$qpcr_analysis_calibrated_table <- renderDataTable({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$df_analysis, message = "No Data Available")
+  )
+  
+  filename <- paste("qPCR_data_calibrated_tiy")
+  opts <- list( dom = "Bflrtip",
+                lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
+                pageLength = 15, scrollX = FALSE)
+  opts[["order"]] <- NULL
+  opts[["buttons"]] <- list("copy","print", list("extend" = 'csv', "text"='csv', "filename" = filename, "title" = filename), list("extend" = 'excel', "text"='Excel', "filename" = filename, "title" = filename), list("extend" = 'pdf', "text"='pdf', "filename" = filename, "title" = filename))#buttons
+  
+  ext <- character(0)
+  ext <- c(ext, "Buttons")
+  ext <- c(ext, "Responsive")
+  
+  # data
+  
+  return(DT::datatable(qpcr_analysis_data()$df_analysis, style = "default", class = "display",  options = opts, extensions = ext))
   
   
 })
@@ -881,13 +1077,86 @@ output$qc_qpcr_sample <- renderUI({
   
 })
 
+# Melting Curve
+
+
+output$qpcr_meltcurve_target <- renderUI({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload the XLSX overview file")
+  )
+  
+  genes <- unique(qpcr_file_xlsx()$df_samples$Type)
+  
+  return(shiny::selectizeInput(inputId = "qpcr_input_meltcurve_target", label = "Select the genes for Melting Curve Analysis" , multiple = TRUE, options = list(maxItems = 10), choices = genes, width = "50%") )
+  
+})
+
+## ANALYSIS
+
+# target genes
+output$qpcr_analysis_target <- renderUI({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload the XLSX overview file")
+  )
+  
+  genes <- unique(qpcr_file_xlsx()$df_samples$Type)
+  
+  return(shiny::selectizeInput(inputId = "qpcr_input_analysis_target", label = "Select the Target Genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "50%") )
+  
+})
+# Calibrator
+output$qpcr_analysis_calibrator <- renderUI({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload the XLSX overview file")
+  )
+  
+  samples <- unique(names(qpcr_file_xlsx()$samplelist))
+  
+  return(shiny::selectizeInput(inputId = "qpcr_input_analysis_calibrator", label = "Select the Sample for calibration" , multiple = TRUE, options = list(maxItems = 1), choices = samples, width = "50%") )
+  
+})
+
+# Samples
+output$qpcr_analysis_samples <- renderUI({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload the XLSX overview file")
+  )
+  
+  samples <- unique(names(qpcr_file_xlsx()$samplelist))
+  
+  return(shiny::selectizeInput(inputId = "qpcr_input_analysis_samples", label = "Select all samples for the analysis" , multiple = TRUE, options = list(maxItems = 50), choices = samples, width = "50%") )
+  
+})
 
 
 
+#### REACTIVE
 
+qpcr_analysis_data <- reactive({
+  
+  # values it depends on
+  #input$qpcr_input_analysis_target
+  #input$qpcr_input_analysis_calibrator
+  #input$qpcr_input_analysis_samples
+  out <- list("tidy" = FALSE,
+              "df_analysis" = NA)
+  
+  # check if everything is filled out
+  if(any(!is.null(shiny::need(input$qpcr_input_analysis_target, label=FALSE)), !is.null(shiny::need(input$qpcr_input_analysis_samples, label=FALSE)), !is.null(shiny::need(input$qpcr_input_analysis_calibrator, label=FALSE)) ) )
+  {
+    return(out)
+  }
+  
+  # all data is there
+  tidy <- TRUE
+  df_analysis <- qpcr_get_analysis(tidydata = qpcr_data()$tidy, samples = input$qpcr_input_analysis_samples, genes = input$qpcr_input_analysis_target, calibrator = input$qpcr_input_analysis_calibrator)
+  
+  out$tidy <- qpcr_data()$tidy
+  out$df_analysis <- df_analysis
+  
+  return(out)
+  
+})
 
-
-
-
-
+observe(qpcr_analysis_data)
 

@@ -8,7 +8,7 @@ tabItem(tabName = "luc_analysis", align = "center",
                         
                         # Put content here
                         
-                        tabBox(width=12,
+                        tabBox(width=12,height = "1000px",
                                title = "Raw Data Overview",
                                tabPanel( "FLUC",
                                          downloadButton("DL_luc_analysis_plot_rawdata_FLUC", label = "Download Plot"),

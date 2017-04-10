@@ -596,7 +596,7 @@ output$DL_luc_analysis_plot_rawdata_FLUC <- downloadHandler(
   }
 )
 
-output$luc_analysis_plot_rawdata_FLUC_plate <- renderPlot({
+output$luc_analysis_plot_rawdata_FLUC_plate <- renderPlot(height = 800,{
   shiny::validate(
     shiny::need(luc_file_data()$plot, message = "No Data Available")
   )
@@ -613,7 +613,7 @@ output$DL_luc_analysis_plot_rawdata_FLUC_plate <- downloadHandler(
   },
   content = function(con) {
     
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_FLUC_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_FLUC_plate(data = luc_file_data()$plot), units="cm", height = 20, width=25, dpi = 600)
   }
 )
 
@@ -641,7 +641,7 @@ output$DL_luc_analysis_plot_rawdata_RLUC <- downloadHandler(
   }
 )
 
-output$luc_analysis_plot_rawdata_RLUC_plate <- renderPlot({
+output$luc_analysis_plot_rawdata_RLUC_plate <- renderPlot(height = 800,{
   shiny::validate(
     shiny::need(luc_file_data()$plot, message = "No Data Available")
   )
@@ -658,7 +658,7 @@ output$DL_luc_analysis_plot_rawdata_RLUC_plate <- downloadHandler(
   },
   content = function(con) {
     
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RLUC_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RLUC_plate(data = luc_file_data()$plot), units="cm", height = 20, width=25, dpi = 600)
   }
 )
 
@@ -687,7 +687,7 @@ output$DL_luc_analysis_plot_rawdata_RATIO <- downloadHandler(
   }
 )
 
-output$luc_analysis_plot_rawdata_RATIO_plate <- renderPlot({
+output$luc_analysis_plot_rawdata_RATIO_plate <- renderPlot(height = 800,{
   shiny::validate(
     shiny::need(luc_file_data()$plot, message = "No Data Available")
   )
@@ -706,7 +706,7 @@ output$DL_luc_analysis_plot_rawdata_RATIO_plate <- downloadHandler(
   },
   content = function(con) {
     
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RATIO_plate(data = luc_file_data()$plot), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_luc_analysis_plot_rawdata_RATIO_plate(data = luc_file_data()$plot), units="cm", height = 20, width=25, dpi = 600)
   }
 )
 

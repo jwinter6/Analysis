@@ -889,7 +889,7 @@ output$qpcr_analysis_plot_ddcq <- renderPlot({
     shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation")
   )
   
-  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, refgenes = input$qpcr_refgenes, yval = "Cqnorm", refgenes = input$qpcr_refgenes)
+  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, refgenes = input$qpcr_refgenes, yval = "Cqnorm")
   
 })
 

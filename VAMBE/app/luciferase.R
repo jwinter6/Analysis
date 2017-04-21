@@ -185,9 +185,12 @@ luc_file_data <- reactive({ #input$submit_luc_data,
       print(input$luc_data$name )
       file_fluc <- grepl(pattern = paste(".*",names(data)[i], ".*FLUC.*", sep=""), x = input$luc_data$name )
       
+      print(file_fluc)
+      
       if(any(file_fluc))
       {
         # FLUC
+        print(input$luc_data[file_fluc,"datapath"])
         data[[i]]$FLUC <- readr::read_tsv(file = input$luc_data[file_fluc,"datapath"], col_names=FALSE, quoted_na = FALSE)
         colnames(data[[i]]$FLUC) <- c("Plate", "Well", "FLUC")
         data[[i]]$FLUC$Plate <- NULL
@@ -196,9 +199,11 @@ luc_file_data <- reactive({ #input$submit_luc_data,
       # filename RLUC
       file_rluc <- grepl(pattern = paste(".*",names(data)[i], ".*RLUC.*", sep=""), x = input$luc_data$name )
       
+      print(file_rluc)
       if(any(file_rluc))
       {
         # RLUC
+        print(input$luc_data[file_rluc,"datapath"])
         data[[i]]$RLUC <- readr::read_tsv(file = input$luc_data[file_rluc,"datapath"], col_names=FALSE, quoted_na = FALSE)
         colnames(data[[i]]$RLUC) <- c("Plate", "Well", "RLUC")
         data[[i]]$RLUC$Plate <- NULL

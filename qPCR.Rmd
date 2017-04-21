@@ -54,11 +54,11 @@ calibrator <- "GAPDH"
 
 #qPCR rawdata
 #file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/data/JW_20170321_qPCR_TestPrimer.txt"
-file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-01_HEK_px459-APC/data/2017-04-01_JW_FOLLOWUP_HEK_px459-APC.txt"
+file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-14_HEK_BCAT-Wnt_GSK/2017-04-14_JW_FOLLOWUP_HEK_px459-BCAT-WNT-GSK.txt"
 
 # XSLX overview file
 #file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
-file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-01_HEK_px459-APC/2017-04-01qPCR_HEK_px459-APC.xlsx"
+file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-14_HEK_BCAT-Wnt_GSK/qPCR_Overview_MASTER.xlsx"
 
 # read file data 
 ## use roche lightcycler defaults
@@ -415,7 +415,7 @@ for(i in 1:length(calc))
 plot(calc$A2$fitted)
 calc$A1$efficiency
 
-qpcR::efficiency(calc$A1$fitted, plot=TRUE, type = "Cy0")
+qpcR::efficiency(calc[[c("A1")]]$fitted, plot=TRUE, type = "Cy0")
 
 #calc
 ```
@@ -536,6 +536,7 @@ qpcR::efficiency(calc$A1$fitted, plot=TRUE, type = "Cy0")
 
 ```{r MeltingCurve}
 
+# Melting Curves
 str(df.melting)
 for(i in 2:ncol(df.melting))
 {
@@ -553,6 +554,9 @@ for(i in 2:ncol(df.melting))
 
 
 meltcurve <- qpcR::meltcurve(data = as.data.frame(df.melting2), temps = c(1,3), fluos = c(2,4), plot = TRUE)
+
+
+# Raw fluorescence curves
 
 
 ```
@@ -696,7 +700,7 @@ featurePos(qPCRraw)
 #         norm.rankinvariant
 #         geometric.mean --> Ct.max -> maximum ct value expected
 # INPUT: refgenes 
-refgenes <- c("GAPDH","PGK1")
+refgenes <- c("PGK1")
 qPCRnorm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = maxCT, deltaCt.genes = refgenes)
 
 # After normalization, we laso put data into the tidy data frame

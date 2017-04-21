@@ -29,7 +29,7 @@ plot_luc_analysis_plot_rawdata_FLUC_plate <- function(data = luc_file_data()$plo
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "FLUC", x = "Samples", y = "FLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -52,7 +52,7 @@ plot_luc_analysis_plot_rawdata_RLUC_plate <- function(data = luc_file_data()$plo
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "RLUC", x = "Samples", y = "RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -74,7 +74,7 @@ plot_luc_analysis_plot_rawdata_RATIO_plate <- function(data = luc_file_data()$pl
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "FLUC normalized by RLUC", x = "Samples", y = "Ratio FLUC/RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   return(p)
 }
 
@@ -430,9 +430,26 @@ plot_qpcr_boxplot_qc <- function(qPCRraw = NA, qPCRnorm=NA, refgenes = NA, maxCT
 {
   if(!is.na(qPCRraw) && !is.na(qPCRnorm) && !is.na(refgenes))
   {
+    # length
+    
+    if(!is.na(qPCRraw))
+    {
+      l <- seq.int(from=1, to = length(sampleNames(qPCRraw)))
+      names(l) <- sampleNames(qPCRraw)
+      l <- l[sort(names(l))]
+    }
+    if(!is.na(qPCRnorm))
+    {
+      l <- seq.int(from=1, to = length(sampleNames(qPCRnorm)))
+      names(l) <- sampleNames(qPCRnorm)
+      l <- l[sort(names(l))]
+    }
+    
+    
+    
     par(mfrow = c(1,2))
     # raw data
-    plotCtBoxes(qPCRraw, stratify = "type",main = "Cq Distribution", ylab = "Calculated Cq" )
+    plotCtBoxes(qPCRraw, cards = l, stratify = "type",main = "Cq Distribution", ylab = "Calculated Cq" )
     if(!is.null(maxCT))
     {
       abline(h = as.numeric(maxCT), lty = 2, col = "red")
@@ -445,7 +462,7 @@ plot_qpcr_boxplot_qc <- function(qPCRraw = NA, qPCRnorm=NA, refgenes = NA, maxCT
     }
     
     # normalized data
-    plotCtBoxes(qPCRnorm, stratify = "type",main = paste("ddCT Distribution - normalized to ", paste(refgenes, collapse = "-"), sep=""), ylab = "Calculated Cq" )
+    plotCtBoxes(qPCRnorm, cards = l, stratify = "type",main = paste("ddCT Distribution - normalized to ", paste(refgenes, collapse = "-"), sep=""), ylab = "Calculated Cq" )
     
     par(mfrow=c(1,1))
     
@@ -620,7 +637,7 @@ qpcr_get_analysis <- function(tidydata = NULL, samples = NULL, genes = NULL, cal
 
 
 
-plot_qpcr_analysis_calibrated <- function(data = NULL, yval = "FC", samples = NULL, calibrator = NULL, refgenes = NULL)
+plot_qpcr_analysis_calibrated <- function(data = NULL, yval = "FC", samples = NULL, calibrator = NULL, refgenes = NULL, log = 1)
 {
   
   ####
@@ -654,7 +671,50 @@ plot_qpcr_analysis_calibrated <- function(data = NULL, yval = "FC", samples = NU
     ylab <- "Foldchange"
   }
   
+  # make log
+  
+  if(log=="2")
+  {
+    
+    errMAX <- log2(data$FC+data$FCsem)
+    #errMIN <- log2(data$FC-data$FCsem)
+    data$FC <- log2(data$FC)
+    data$FCsem <- errMAX-data$FC
+    
+    data <- data %>% na.omit()
+    ylab <- "Log2 Foldchange"
+    
+    # recalculate error by 
+    # Δlogb x ≈ Δx/x⋅lnb
+    
+    # data$FCsem <- apply(data,1,function(x)
+    #   {
+    #   err <- as.numeric(x[["FCsem"]])/(as.numeric(x[["FC"]])*log(2))
+    #   return(as.numeric(err))
+    # }) 
+    
+  } else if (log == "10")
+  {
+    errMAX <- log10(data$FC+data$FCsem)
+    #errMIN <- log10(data$FC-data$FCsem)
+    data$FC <- log10(data$FC)
+    data$FCsem <- errMAX-data$FC
+    data <- data %>% na.omit()
+    ylab <- "Log10 Foldchange"
+    # data$FCsem <- apply(data,1,function(x)
+    # {
+    #   err <- as.numeric(x[["FCsem"]])/(as.numeric(x[["FC"]])*log(10))
+    #   return(as.numeric(err))
+    # }) 
+    
+  } else {
+    
+    ylab <- "Foldchange"
+  }
+  
   # make plot
+  data <- data %>% na.omit()
+  
   p <- ggplot(data, aes_string(x=xval, y=yval,fill=fillval)) + 
     geom_bar(stat="identity", position = "dodge", na.rm = TRUE)
   
@@ -742,24 +802,31 @@ calculate_cq <- function(df.pcr = NULL, cq_calc_method = "Cy0"){
 
 
 ## get tody data
-qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
+qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL, minCT=5, maxCT=35){
   
   #tidy_qpcr <- tibble::as_tibble(fData(qPCRnorm))
   tidy_qpcr <- NULL
   
   # norm in object qPCRnorm, raw in qPCRraw
   
-  for(i in 1:length(sampleNames(qPCRnormobject)))
+  for(i in 1:length(HTqPCR::sampleNames(qPCRnormobject)))
   {
     if(i==1)
     {
       # tidy Ct
       ct <- NULL
-      ct <- tibble::as_tibble( HTqPCR::getCt(qPCRrawobject)[,i])
-      ct$value[ct$value >= maxCT] <- NA
-      ct$value[ct$value <= minCT] <- NA
-      tidy_qpcr <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
+      ct <- tibble::as_tibble(getCt(qPCRrawobject)[,i])
+      
+      ct$value[ct$value >= as.numeric(maxCT)] <- NA
+      ct$value[ct$value <= as.numeric(minCT)] <- NA
+      
+      print(ct)
+      
+      tidy_qpcr <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(HTqPCR::sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
+      
       colnames(tidy_qpcr) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
+      
+      print(tidy_qpcr)
       
     } else
     {
@@ -767,10 +834,10 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
       ct <- NULL
       tidy_qpcr_temp <- NULL
       ct <- tibble::as_tibble(getCt(qPCRrawobject)[,i])
-      ct$value[ct$value >= maxCT] <- NA
-      ct$value[ct$value <= minCT] <- NA
+      ct$value[ct$value >= as.numeric(maxCT)] <- NA
+      ct$value[ct$value <= as.numeric(minCT)] <- NA
       
-      tidy_qpcr_temp <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
+      tidy_qpcr_temp <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(HTqPCR::sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(featureCategory(qPCRnormobject)[i])
       
       colnames(tidy_qpcr_temp) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Flagged")
       # add rows of sample
@@ -778,6 +845,7 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
       
     }
   }
+  
   
   ## add SD
   ## add SD for each target gene and sample
@@ -792,8 +860,6 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL){
     return(unique(df_sd$SD))
   })
 
-  
-  
   # make undetermined NA
   tidy_qpcr <- dplyr::mutate(tidy_qpcr,
                                 Row=as.numeric(match(toupper(substr(Pos, 1, 1)), LETTERS)),

@@ -364,13 +364,12 @@ observe(qpcr_file_data())
     # Calculate CQ
     cq <- calculate_cq(df.pcr = qpcr_file_data()$pcr, cq_calc_method = input$qpcr_cq_method)
     
-    
-    
+
     # write calc list wiht all cq values to a tibble for htqpcr
-    cq <- lapply(calc,function(x){
+    cq1 <- lapply(cq,function(x){
       return(x[["cq"]])
     })
-    cq_df <- as.data.frame(t(as.data.frame(cq)))
+    cq_df <- as.data.frame(t(as.data.frame(cq1)))
     cq_df$V1 <- as.numeric(cq_df$V1)
     
     
@@ -421,6 +420,7 @@ observe(qpcr_file_data())
       # fullplate_df <- dplyr::full_join(fullplate_df, dplyr::select(df_samples, Position), by= "Position")
       fullplate_df <- dplyr::arrange(fullplate_df,Type)
       #readr::write_tsv(x = dplyr::filter(output_cqdata, Sample == n_samples[i]), path = file.path(getwd(), n_samples[i]), col_names = FALSE)
+      #print(file.path(config$userDir, n_samples$Treatment[i]))
       readr::write_tsv(x = fullplate_df, path = file.path(config$userDir, n_samples$Treatment[i]), col_names = FALSE, append = FALSE)
     }
     
@@ -430,15 +430,47 @@ observe(qpcr_file_data())
     qPCRraw <- HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features)
     # 
     
-    ## FLAG and FILTER
-    qPCRraw <- setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE)
+    # # set controls again to make sure they are properly set!
+    # df_feature <- fData(qPCRraw)
+    # df_feature$featureType <- apply(df_feature, 1, function(x, control = input$qpcr_input_control, pos = input$qpcr_input_poscontrol, neg = input$qpcr_input_negcontrol)
+    #                                 {
+    #                                   if(x[["featureNames"]] %in% control)
+    #                                   {
+    #                                     return("Endogenous Control")
+    #                                   } else if(x[["featureNames"]] %in% pos)
+    #                                   {
+    #                                     return("Positive Control")
+    #                                   } else if(x[["featureNames"]] %in% neg)
+    #                                   {
+    #                                     return("Negative Control")
+    #                                   } else 
+    #                                   {
+    #                                     return("Target")
+    #                                   }
+    #                                 })
+    # fData(qPCRraw) <- df_feature
     
+    ## FLAG and FILTER
+    qPCRraw <- HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE)
+    
+    # get rid of values that are 40
+    df_ct <- getCt(qPCRraw)
+    df_ct_cols <- colnames(df_ct)
+    for(i in 1:length(df_ct_cols))
+    {
+      df_ct[df_ct[,i] >=40,i] <- NA
+    }
+    
+    #setCt(qPCRraw) <- df_ct
+    qPCRraw <- filterCategory(qPCRraw)
     # Normalize
-    qPCRnorm <- normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes)
+    qPCRnorm <- HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes)
     
     # make tidy data
     
-    qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw)
+    qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw, minCT = as.numeric(input$minCT), maxCT = as.numeric(input$maxCT))
+    
+    
     
     ###### data structures to use
     # qPCRraw <- rawdata qPCR for HTqPCR
@@ -448,7 +480,8 @@ observe(qpcr_file_data())
     out <- list(
       "qPCRraw" = qPCRraw,
       "qPCRnorm" = qPCRnorm,
-      "tidy" = qpcr_tidy
+      "tidy" = qpcr_tidy,
+      "cq" = cq
     )
     
     shinyBS::toggleModal(session, "qpcr_data_calc_modal", toggle = "open")
@@ -853,6 +886,35 @@ output$qpcr_qc_meltcurve <- renderPlot({
   
 })
 
+########## FLUORESCENCE CURVE
+output$qpcr_qc_fluorescencecurve <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload data" ),
+    shiny::need(qpcr_file_data, "Please upload data" ),
+    shiny::need(qpcr_data, "Please upload data" ),
+    shiny::need(input$qpcr_input_meltcurve_target, "Please select genes" )
+  )
+  
+  # get well information from qpcr_file_xlsx()$df_samples
+  
+  wells <- dplyr::filter(qpcr_file_xlsx()$df_samples, Type %in% input$qpcr_input_meltcurve_target) %>% dplyr::select(Position)
+  wells <- wells$Position
+  # get the column position in qpcr_file_data()$melting
+  #wellsmatch <- match(wells$Position ,colnames(qpcr_file_data()$melting))
+  print(wells)
+  # create plot
+  l <- length(wells)
+  par(mfrow = n2mfrow(l) )
+  for(i in 1:l)
+  {
+    qpcR::efficiency(qpcr_data()$cq[[wells[i]]]$fitted, plot=TRUE, type = "Cy0")
+  }
+  
+  #qpcR::meltcurve(data = as.data.frame(qpcr_file_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
+  
+  par(mfrow = c(1,1))
+})
+
 
 
 ######### ANALYSIS PLOTS
@@ -922,6 +984,48 @@ output$DL_qpcr_analysis_plot_calibrated <- downloadHandler(
   },
   content = function(con) {
     ggplot2::ggsave(filename = con, device= "png" , plot =plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL), units="cm", height = 10, width=25, dpi = 600)
+    
+    
+  }
+)
+
+# plot Fold change LOG2
+output$qpcr_analysis_plot_calibrated_log2 <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$df_analysis, "Please run the calculation")
+  )
+  
+  plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL, log = "2")
+  
+})
+
+output$DL_qpcr_analysis_plot_calibrated_log2 <- downloadHandler(
+  filename = function() {
+    paste('qPCR_Analysis_Foldchange_', paste(input$qpcr_input_analysis_target, collapse = "-"),"_calibrated-to_", paste(input$qpcr_input_analysis_calibrator, collapse = "") , ".png", sep="")
+  },
+  content = function(con) {
+    ggplot2::ggsave(filename = con, device= "png" , plot =plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL, log = "2"), units="cm", height = 10, width=25, dpi = 600)
+    
+    
+  }
+)
+
+# plot Fold change LOG10
+output$qpcr_analysis_plot_calibrated_log10 <- renderPlot({
+  shiny::validate(
+    shiny::need(qpcr_analysis_data()$df_analysis, "Please run the calculation")
+  )
+  
+  plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL, log = "10")
+  
+})
+
+output$DL_qpcr_analysis_plot_calibrated_log10 <- downloadHandler(
+  filename = function() {
+    paste('qPCR_Analysis_Foldchange_', paste(input$qpcr_input_analysis_target, collapse = "-"),"_calibrated-to_", paste(input$qpcr_input_analysis_calibrator, collapse = "") , ".png", sep="")
+  },
+  content = function(con) {
+    ggplot2::ggsave(filename = con, device= "png" , plot =plot_qpcr_analysis_calibrated(data = qpcr_analysis_data()$df_analysis,  yval = "FC", samples = input$qpcr_input_analysis_samples, calibrator = input$qpcr_input_analysis_calibrator, refgenes = NULL, log = "10"), units="cm", height = 10, width=25, dpi = 600)
     
     
   }

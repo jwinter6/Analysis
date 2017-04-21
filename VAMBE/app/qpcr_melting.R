@@ -21,6 +21,16 @@ tabItem(tabName = "qpcr_melting", align = "center",
                                              plotOutput("qpcr_qc_meltcurve", height = "800px")
                                              
                                       )
+                        ),
+                        
+                        
+                        shiny::column(width=12,
+                                      
+                                      box(width = 12, title = "Fluorescence Curves",solidHeader = TRUE, status="primary",
+                                          
+                                          plotOutput("qpcr_qc_fluorescencecurve", height = "800px")
+                                          
+                                      )
                         )
                         
         )

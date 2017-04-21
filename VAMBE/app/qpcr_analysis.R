@@ -35,6 +35,16 @@ tabItem(tabName = "qpcr_analysis", align = "center",
                                                       #plots ddCT normalized Cq values
                                                       downloadButton("DL_qpcr_analysis_plot_calibrated", label = "Download Plot"),
                                                       plotOutput("qpcr_analysis_plot_calibrated")
+                                             ),
+                                             tabPanel("Log2 Foldchange",
+                                                      #plots ddCT normalized Cq values
+                                                      downloadButton("DL_qpcr_analysis_plot_calibrated_log2", label = "Download Plot"),
+                                                      plotOutput("qpcr_analysis_plot_calibrated_log2")
+                                             ),
+                                             tabPanel("Log10 Foldchange",
+                                                      #plots ddCT normalized Cq values
+                                                      downloadButton("DL_qpcr_analysis_plot_calibrated_log10", label = "Download Plot"),
+                                                      plotOutput("qpcr_analysis_plot_calibrated_log10")
                                              )
                                              
                                              

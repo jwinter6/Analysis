@@ -51,6 +51,9 @@ config$userDir <- file.path(config$mainDir, config$userID)
 
 dir.create(config$userDir)
 
+# make chmod 777 for created dir
+system2(command = "chmod", args = c("-R", "777", config$userDir))
+
 
 
 
@@ -240,9 +243,9 @@ server <- function(input, output, session) {
   
   # once session is done, remove config$userDir
   session$onSessionEnded(function() {
-    print(paste("remove UserDirectory: ", config$userDir))
-    system2(command = "rm", args = c("-r", "-f", config$userDir))
-    unlink(config$userDir, recursive = TRUE)
+    print(paste("remove UserDirectory: ", file.path(config$mainDir, config$userID)))
+    system2(command = "rm", args = c("-r", "-f", file.path(config$mainDir, config$userID)))
+    unlink(file.path(config$mainDir, config$userID), recursive = TRUE)
   })
   
   # 4096MB upload limit per file

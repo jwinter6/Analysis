@@ -1,0 +1,58 @@
+---
+title: "TidyDF_Visualization"
+author: "Jan Winter"
+date: "13 April 2017"
+output: html_document
+---
+
+# Load all CSV files into a single, large tidy tibble
+
+```{r setup, include=FALSE}
+
+# load CSV files
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/CSV"
+files <- list.files(path = path ,pattern="*.csv")
+
+for(i in 1:length(files))
+{
+  # do bind_rows to add those, they all have the same column structure
+ if(i == 1){
+   # initialise
+   
+   data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+ } else {
+   
+   data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+ } 
+  
+}
+
+# remove X1
+data_tibble$X1 <- NULL
+
+```
+
+# Make plots
+
+```{r makeplots}
+# remove any _3 etc from gene names
+
+data_tibble$Treatment <- sub(pattern = "_\\d{1}", replacement = "",x = data_tibble$Treatment)
+
+# select genes
+genes <- c("Topflash", "CFC1","B4GALT6", "B4GALT7", "FARP2", "KLHL22", "KIF21A", "DIXDC1","KRT36","RASAL3", "RIC1", "CEP55","LIMS1","FRMD5")
+
+
+data <- dplyr::filter(data_tibble, Treatment %in% genes)
+
+ p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+
+
+```

@@ -377,7 +377,6 @@ observe(qpcr_file_data())
     # FLAG Cq falues as NA for weird values
     # Input: maxCT and minCT for maximum and minum threshold. Everything above/below is set to NA and will be marked as FLAGGED
     
-    
     cq_df$V1[cq_df$V1 >= as.numeric(input$maxCT)] <- NA
     cq_df$V1[cq_df$V1 <= as.numeric(input$minCT)] <- NA
     
@@ -402,11 +401,14 @@ observe(qpcr_file_data())
     output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control", "Flag")]
     
     n_samples <- unique(output_cqdata$Sample)
+    
     n_samples <- n_samples[!is.na(n_samples)]
+    
     n_samples <- tibble::tibble("Files" = n_samples, "Treatment" = n_samples)
     
     n_features <- nrow(dplyr::filter(df_samples, Sample == n_samples$Files[1]) %>% dplyr::select(Position))
     # 
+    
     for(i in 1:length(n_samples$Files))
     {
       
@@ -454,7 +456,7 @@ observe(qpcr_file_data())
     qPCRraw <- HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE)
     
     # get rid of values that are 40
-    df_ct <- getCt(qPCRraw)
+    df_ct <- HTqPCR::getCt(qPCRraw)
     df_ct_cols <- colnames(df_ct)
     for(i in 1:length(df_ct_cols))
     {
@@ -462,13 +464,13 @@ observe(qpcr_file_data())
     }
     
     #setCt(qPCRraw) <- df_ct
-    qPCRraw <- filterCategory(qPCRraw)
+    qPCRraw_unfiltered <- qPCRraw
+    qPCRraw <- HTqPCR::filterCategory(qPCRraw)
     # Normalize
     qPCRnorm <- HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes)
     
     # make tidy data
-    
-    qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw, minCT = as.numeric(input$minCT), maxCT = as.numeric(input$maxCT))
+    qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw, qPCRrawunfiltered = qPCRraw_unfiltered, minCT = as.numeric(input$minCT), maxCT = as.numeric(input$maxCT), file = input$qpcr_xlsx$name)
     
     
     
@@ -478,6 +480,7 @@ observe(qpcr_file_data())
     # qpcr_tidy <- data in tidy format
     
     out <- list(
+      "qPCRraw_unfiltered" = qPCRraw_unfiltered,
       "qPCRraw" = qPCRraw,
       "qPCRnorm" = qPCRnorm,
       "tidy" = qpcr_tidy,
@@ -490,6 +493,7 @@ observe(qpcr_file_data())
     
   } else {
     out <- list(
+      "qPCRraw_unfiltered" = NA,
       "qPCRraw" = NA,
       "qPCRnorm" = NA,
       "tidy" = NA
@@ -902,12 +906,14 @@ output$qpcr_qc_fluorescencecurve <- renderPlot({
   # get the column position in qpcr_file_data()$melting
   #wellsmatch <- match(wells$Position ,colnames(qpcr_file_data()$melting))
   print(wells)
+  
   # create plot
   l <- length(wells)
   par(mfrow = n2mfrow(l) )
   for(i in 1:l)
   {
-    qpcR::efficiency(qpcr_data()$cq[[wells[i]]]$fitted, plot=TRUE, type = "Cy0")
+    print(qpcr_data()$cq[[wells[i]]]$fitted)
+    try(qpcR::efficiency(qpcr_data()$cq[[wells[i]]]$fitted, plot=TRUE, type = "Cy0"))
   }
   
   #qpcR::meltcurve(data = as.data.frame(qpcr_file_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
@@ -1044,7 +1050,7 @@ output$qpcr_xlsx_rawdata <- renderDataTable({
     shiny::need(qpcr_file_xlsx()$df_samples, message = "No Data Available")
   )
   
-  filename <- paste("qPCR_Rawdata")
+  filename <- paste(paste("qPCR_Rawdata") )
   opts <- list( dom = "Bflrtip",
                 lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
                 pageLength = 15, scrollX = FALSE)

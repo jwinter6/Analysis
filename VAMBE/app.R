@@ -17,6 +17,7 @@
 # - analysis of qPCR Data
 
 # load packages
+#library(HTqPCR)
 library(shiny)
 library(shinydashboard)
 library(tidyverse)
@@ -30,7 +31,7 @@ library(openxlsx)
 library(shinyjs)
 library(shinyBS)
 library(qpcR)
-library(HTqPCR)
+
 
 
 

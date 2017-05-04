@@ -49,11 +49,12 @@ luc_file_xlsx <- reactive( { #input$submit_luc_xlsx,
     # Get Sheets
     plates <- list()
     groups <- NA
-    ## check if multiple
+    ## go and load layouts from XLSX, skip first sheet since it is the protocol
     for(i in 2:length(wb_names))
     {
-      if(grepl(pattern = "Plate.+", x=wb_names[i]) )
-      {
+      # Load layout
+      # if(grepl(pattern = "Plate.+", x=wb_names[i]) )
+      # {
         plates[[wb_names[i]]]$layout <- as.data.frame(openxlsx::read.xlsx(xlsxFile = luc_file$datapath, sheet = wb_names[i], colNames = TRUE, rowNames = TRUE), stringsAsFactors=FALSE)
         
         plates[[wb_names[i]]]$shape <- reshape2::melt(as.matrix(plates[[wb_names[i]]]$layout))
@@ -63,8 +64,7 @@ luc_file_xlsx <- reactive( { #input$submit_luc_xlsx,
         
         # set treatment groups
         groups <- c(groups, as.character(plates[[wb_names[i]]]$shape$value))
-        
-      }
+      #}
       
     }
     
@@ -92,12 +92,6 @@ luc_file_xlsx <- reactive( { #input$submit_luc_xlsx,
     out$groups <-  unique(groups)
     out$plate_rows <- plate_rows 
     out$plate_cols <- plate_cols
-    
-    
-    print(str(out$plates))
-    print(str(out$groups))
-    
-    
     
     return(out)
   }
@@ -178,43 +172,53 @@ luc_file_data <- reactive({ #input$submit_luc_data,
     # grepl(pattern = paste(".*",names(plates), ".*FLUC", sep=""),x = test$name )
     # grepl(pattern = paste(".*",names(plates), ".*RLUC", sep=""), x = test$name )
     # 
+    print(names(data))
+    print(data)
+    # load files
+    # data has the plate names!
     for(i in 1:length(data))
     {
       # filename FLUC
       print(names(data)[i])
-      print(input$luc_data$name )
-      file_fluc <- grepl(pattern = paste(".*",names(data)[i], ".*FLUC.*", sep=""), x = input$luc_data$name )
+      #print(input$luc_data$name )
       
+      # find the matching file
+      file_fluc <- grep(pattern = paste(".*",names(data)[i], ".*", sep=""), x = input$luc_data$name )
       print(file_fluc)
       
-      if(any(file_fluc))
+      # Load the matching file
+      if(length(file_fluc) >= 1)
       {
         # FLUC
-        print(input$luc_data[file_fluc,"datapath"])
-        data[[i]]$FLUC <- readr::read_tsv(file = input$luc_data[file_fluc,"datapath"], col_names=FALSE, quoted_na = FALSE)
+        # check for FLUC
+        file_fluc2 <- grepl(pattern = ".*FLUC.*", x = input$luc_data$name[file_fluc] )
+        print(file_fluc2)
+        #print(file_fluc2)
+        # print(input$luc_data[file_fluc[file_fluc2],"name"])
+        data[[i]]$FLUC <- readr::read_tsv(file = input$luc_data[file_fluc[file_fluc2],"datapath"], col_names=FALSE, quoted_na = FALSE)
         colnames(data[[i]]$FLUC) <- c("Plate", "Well", "FLUC")
         data[[i]]$FLUC$Plate <- NULL
-      } 
-      
-      # filename RLUC
-      file_rluc <- grepl(pattern = paste(".*",names(data)[i], ".*RLUC.*", sep=""), x = input$luc_data$name )
-      
-      print(file_rluc)
-      if(any(file_rluc))
-      {
+        
+        
         # RLUC
-        print(input$luc_data[file_rluc,"datapath"])
-        data[[i]]$RLUC <- readr::read_tsv(file = input$luc_data[file_rluc,"datapath"], col_names=FALSE, quoted_na = FALSE)
+        
+        # filename RLUC
+        # find the matching file
+        file_rluc <- grepl(pattern = ".*RLUC.*", x = input$luc_data$name[file_fluc] )
+        print(file_rluc)
+        # load the matching file
+        data[[i]]$RLUC <- readr::read_tsv(file = input$luc_data[file_fluc[file_rluc],"datapath"], col_names=FALSE, quoted_na = FALSE)
         colnames(data[[i]]$RLUC) <- c("Plate", "Well", "RLUC")
         data[[i]]$RLUC$Plate <- NULL
-      }
+        
+      } 
       
       
-      if(any(file_fluc) && any(file_rluc))
+      if(any(file_fluc2) && any(file_rluc))
       {
         # Combine them in one
         data[[i]]$ALL <- dplyr::inner_join(data[[i]]$FLUC, data[[i]]$RLUC, by="Well")
-        data[[i]]$ALL$Plate <- paste("Plate",i,sep="")
+        data[[i]]$ALL$Plate <- names(data)[i]
         
         # # Median normaliziation
         # if(normalize){
@@ -361,6 +365,7 @@ luc_file_data <- reactive({ #input$submit_luc_data,
       plot$data$RLUC.sd[i] <- treatmentgroups$RLUC.sd[treatmentgroups$Treatment == plot$data$Treatment[i]]
     }
     
+    plot$data <- input$luc_xlsx$name
     
     # Return data
     out <- list()
@@ -530,6 +535,7 @@ output$luc_qc_divided_overview <- renderPlot({
   
   data_use <- dplyr::filter(luc_file_data()$plot, Plate == input$luc_qc_input_plate)
   # if no treatment is specified -> set to NA
+  print(data_use)
   data_use[is.na(data_use$Treatment),c("Treatment","FLUC","RLUC","Divided","Log2")] <- NA
   
   # Plate Overview of Samples

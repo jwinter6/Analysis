@@ -1,16 +1,19 @@
 ---
 title: "TidyDF_Visualization"
 author: "Jan Winter"
-date: "13 April 2017"
-output: html_document
+date: "24 April 2017"
+output:
+  html_document:
+    fig_width: 10
+  pdf_document: default
 ---
 
 # Load all CSV files into a single, large tidy tibble
 
 ```{r setup, include=FALSE}
-
+library(tidyverse)
 # load CSV files
-path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/CSV"
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/CSV/HEK/"
 files <- list.files(path = path ,pattern="*.csv")
 
 for(i in 1:length(files))
@@ -32,16 +35,39 @@ data_tibble$X1 <- NULL
 
 ```
 
+Data loaded from `r path` stored in `r length(files)` CSV files.  
+
+# All Data
+
+```{r all-data}
+
+library(DT)
+
+DT::datatable(data_tibble)
+
+```
+
+
 # Make plots
+
+First we replace numbers to only get back gene symbols.  
+Then we select the genes we want to investigate and plot them without and with 50ng/mL Wnt stimulation.  
+
 
 ```{r makeplots}
 # remove any _3 etc from gene names
 
-data_tibble$Treatment <- sub(pattern = "_\\d{1}", replacement = "",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "_\\d{1,2}", replacement = "",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^TOP$", replacement = "Topflash",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^TOP_", replacement = "Topflash",x = data_tibble$Treatment)
 
+```
+
+## Without WNT stimulation
+
+```{r no-wnt, dpi=300}
 # select genes
-genes <- c("Topflash", "CFC1","B4GALT6", "B4GALT7", "FARP2", "KLHL22", "KIF21A", "DIXDC1","KRT36","RASAL3", "RIC1", "CEP55","LIMS1","FRMD5")
-
+genes <- c("APC","Topflash","CFC1","B4GALT6", "B4GALT7", "FARP2", "KLHL22", "KIF21A","KRT36","RASAL3", "RIC1", "CEP55","LIMS1","FRMD5","DNAJB14","B4GALT1", "PAQR7","TMEM191B", "px459")
 
 data <- dplyr::filter(data_tibble, Treatment %in% genes)
 
@@ -50,9 +76,45 @@ data <- dplyr::filter(data_tibble, Treatment %in% genes)
     geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
     ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 1) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
   
  p
-
-
 ```
+
+
+## With Wnt Stimulation
+
+```{r wnt, dpi=300}
+# select genes
+genes_wnt <- c("APC_Wnt","Topflash_Wnt","CFC1_Wnt","B4GALT6_Wnt", "B4GALT7_Wnt", "FARP2_Wnt", "KLHL22_Wnt", "KIF21A_Wnt","KRT36_Wnt","RASAL3_Wnt", "RIC1_Wnt", "CEP55_Wnt","LIMS1_Wnt","FRMD5_Wnt","DNAJB14_Wnt","B4GALT1_Wnt", "PAQR7_Wnt","TMEM191B_Wnt", "px459_Wnt")
+
+data <- dplyr::filter(data_tibble, Treatment %in% genes_wnt)
+
+ p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ # Log 2
+ 
+  p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ 
+ 
+```
+
+

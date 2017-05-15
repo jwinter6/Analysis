@@ -372,13 +372,15 @@ observe(qpcr_file_data())
     cq_df <- as.data.frame(t(as.data.frame(cq1)))
     cq_df$V1 <- as.numeric(cq_df$V1)
     
-    
+    print("1")
     
     # FLAG Cq falues as NA for weird values
     # Input: maxCT and minCT for maximum and minum threshold. Everything above/below is set to NA and will be marked as FLAGGED
     
     cq_df$V1[cq_df$V1 >= as.numeric(input$maxCT)] <- NA
     cq_df$V1[cq_df$V1 <= as.numeric(input$minCT)] <- NA
+    
+    print("2")
     
     # Flag
     cq_df$Flag[is.na(cq_df$V1)] <- "undetermined"
@@ -388,6 +390,7 @@ observe(qpcr_file_data())
     cq_df <- tibble::as_tibble(cq_df)
     colnames(cq_df) <- c("Cq", "Flag", "Position")
     
+    print("3")
     # make another df_samples
     df_samples <- dplyr::left_join(x=qpcr_file_xlsx()$df_samples, y=cq_df, by="Position")
     
@@ -397,6 +400,7 @@ observe(qpcr_file_data())
     df_samples$Control[df_samples$Control %in% input$qpcr_input_negcontrol] <- "Negative Control"
     df_samples$Control[!(df_samples$Control %in% c("Endogenous Control", "Positive Control", "Negative Control") )] <- "Target"
     
+    print("4")
     # raw Cq data output for htqpcr
     output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control", "Flag")]
     
@@ -408,16 +412,16 @@ observe(qpcr_file_data())
     
     n_features <- nrow(dplyr::filter(df_samples, Sample == n_samples$Files[1]) %>% dplyr::select(Position))
     # 
-    
+    print("5")
     for(i in 1:length(n_samples$Files))
     {
-      
+      print(paste("6", i, sep="-") )
       fullplate_df <- NULL
       pos1 <- dplyr::filter(df_samples, Sample == n_samples$Treatment[i]) %>% dplyr::select( Position)
       fullplate_df <- tibble("Position" = pos1$Position)
       fullplate_df <- dplyr::left_join(fullplate_df, dplyr::filter(output_cqdata, Sample == n_samples$Treatment[i]))
       #fullplate_df <- dplyr::filter(output_cqdata, Sample == n_samples[i]) %>% dplyr::arrange(Type)
-      pos <- dplyr::filter(df_samples, Sample == n_samples$Treatment[1]) %>% dplyr::select( Position)
+      pos <- dplyr::filter(df_samples, Sample == n_samples$Treatment[1]) %>% dplyr::select(Position)
       fullplate_df$Position <- pos$Position
       # fullplate_df <- dplyr::full_join(fullplate_df, dplyr::select(df_samples, Position), by= "Position")
       fullplate_df <- dplyr::arrange(fullplate_df,Type)
@@ -427,11 +431,15 @@ observe(qpcr_file_data())
     }
     
     # config$userDir
-    
+    print("7")
     # read back in for htqpcr as qcprdataset
-    qPCRraw <- HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features)
+    qPCRraw <- try(HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features))
     # 
     
+    if(class(qPCRraw) == "try-error")
+    {
+      return(NA)
+    }
     # # set controls again to make sure they are properly set!
     # df_feature <- fData(qPCRraw)
     # df_feature$featureType <- apply(df_feature, 1, function(x, control = input$qpcr_input_control, pos = input$qpcr_input_poscontrol, neg = input$qpcr_input_negcontrol)
@@ -451,10 +459,15 @@ observe(qpcr_file_data())
     #                                   }
     #                                 })
     # fData(qPCRraw) <- df_feature
-    
+    print("8")
     ## FLAG and FILTER
-    qPCRraw <- HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE)
+    qPCRraw <- try(HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE))
     
+    if(class(qPCRraw) == "try-error")
+    {
+      return(NA)
+    }
+    print("9")
     # get rid of values that are 40
     df_ct <- HTqPCR::getCt(qPCRraw)
     df_ct_cols <- colnames(df_ct)
@@ -462,22 +475,32 @@ observe(qpcr_file_data())
     {
       df_ct[df_ct[,i] >=40,i] <- NA
     }
-    
+    print("10")
     #setCt(qPCRraw) <- df_ct
     qPCRraw_unfiltered <- qPCRraw
-    qPCRraw <- HTqPCR::filterCategory(qPCRraw)
+    qPCRraw <- try(HTqPCR::filterCategory(qPCRraw))
+    if(class(qPCRraw) == "try-error")
+    {
+      return(NA)
+    }
+    print("11")
     # Normalize
-    qPCRnorm <- HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes)
-    
+    qPCRnorm <- try(HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes))
+    if(class(qPCRnorm) == "try-error")
+    {
+      return(NA)
+    }
+    print("12")
     # make tidy data
     qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw, qPCRrawunfiltered = qPCRraw_unfiltered, minCT = as.numeric(input$minCT), maxCT = as.numeric(input$maxCT), file = input$qpcr_xlsx$name)
     
-    
+    print("13")
     
     ###### data structures to use
     # qPCRraw <- rawdata qPCR for HTqPCR
     # qPCRnorm <- normalized qPCR for HTqPCR
     # qpcr_tidy <- data in tidy format
+    
     
     out <- list(
       "qPCRraw_unfiltered" = qPCRraw_unfiltered,
@@ -1259,10 +1282,17 @@ qpcr_analysis_data <- reactive({
   
   # all data is there
   tidy <- TRUE
-  df_analysis <- qpcr_get_analysis(tidydata = qpcr_data()$tidy, samples = input$qpcr_input_analysis_samples, genes = input$qpcr_input_analysis_target, calibrator = input$qpcr_input_analysis_calibrator)
+  
+  print(qpcr_data()$tidy)
+  df_analysis <- try(qpcr_get_analysis(tidydata = qpcr_data()$tidy, samples = input$qpcr_input_analysis_samples, genes = input$qpcr_input_analysis_target, calibrator = input$qpcr_input_analysis_calibrator))
+  
+  print(class(df_analysis))
+  
   
   out$tidy <- qpcr_data()$tidy
   out$df_analysis <- df_analysis
+  
+  print(out$df_analysis)
   
   return(out)
   

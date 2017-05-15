@@ -1,0 +1,257 @@
+---
+title: "TidyDF_Visualization"
+author: "Jan Winter"
+date: "24 April 2017"
+output:
+  html_document:
+    fig_width: 10
+    fig.retina: 1
+  pdf_document: default
+---
+
+# Load all CSV files into a single, large tidy tibble
+
+```{r setup, include=FALSE}
+library(tidyverse)
+# load CSV files
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/CSV/HCT116/"
+file <- "HCT116TCF_all"
+
+files <- list.files(path = path ,pattern="*.csv")
+
+for(i in 1:length(files))
+{
+  # do bind_rows to add those, they all have the same column structure
+ if(i == 1){
+   # initialise
+   
+   data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   data_tibble$File <- files[i]
+ } else {
+   
+   #data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   data_tibble2 <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   data_tibble2$File <- files[i]
+   data_tibble <- data_tibble %>% dplyr::bind_rows(data_tibble2)
+ } 
+  
+}
+
+# remove X1
+data_tibble$X1 <- NULL
+
+
+```
+
+Data loaded from `r path` stored in `r length(files)` CSV files.  
+
+# All Data
+
+```{r all-data}
+
+library(DT)
+
+DT::datatable(data_tibble)
+
+```
+
+
+# Make plots
+
+First we replace numbers to only get back gene symbols.  
+Then we select the genes we want to investigate and plot them without and with 50ng/mL Wnt stimulation.  
+
+
+```{r makeplots}
+# remove any _3 etc from gene names
+
+data_tibble$Treatment <- sub(pattern = "_\\d{1,2}", replacement = "",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "_p\\d{1,2}", replacement = "",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^TOP$", replacement = "Topflash",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^TOP_", replacement = "Topflash_",x = data_tibble$Treatment)
+
+data_tibble$Treatment <- sub(pattern = "^SPRY_", replacement = "SPRY2_",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^B1GALT1", replacement = "B4GALT1",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^NPBWr", replacement = "NPBWR",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "^Kremen1", replacement = "KREMEN1",x = data_tibble$Treatment)
+
+
+data_tibble$Treatment <- sub(pattern = "TOPFLASH", replacement = "Topflash",x = data_tibble$Treatment)
+data_tibble$Treatment <- sub(pattern = "Wnt3", replacement = "Wnt",x = data_tibble$Treatment)
+
+```
+
+
+# Remove LOW values
+
+Then we remove all measurements with LOW RLUC levels as we expect something went wrong for thos
+
+```{r removelowrluc}
+RLUCthresh <- 50
+
+# Eliminate all entries with LOW RLUC values
+data_tibble <- data_tibble %>% dplyr::filter(RLUC.mean > RLUCthresh)
+
+
+# check for plates where px459 calibrated to itself is > 1.2 (should not be possible, plate may be bad)
+Fileremove <- data_tibble %>% filter(Treatment == "px459", Divided > 1.5) %>% dplyr::select(File) %>% .$File
+data_tibble <- data_tibble %>% filter(!File %in% Fileremove)
+
+Fileremove <- data_tibble %>% filter(Treatment == "px459_Wnt", Divided > 1.5, Divided < 0.6) %>% dplyr::select(File) %>% .$File
+data_tibble <- data_tibble %>% filter(!File %in% Fileremove)
+
+
+```
+
+# Safe tidy data in CSV
+
+```{r savetidy}
+
+write_tsv(x = data_tibble, path = paste(file,".tsv", sep=""),append = FALSE,col_names = TRUE)
+```
+
+# make Wnt treatment separate and plot a ranked boxplot
+
+```{r heatmap}
+data_heat <- data_tibble
+
+# make additional column with Wnt 1 or 0
+data_heat <- data_heat %>% dplyr::mutate(Wnt = grepl(pattern = ".*Wnt.*",x = Treatment))
+
+
+# Try 1: Wnt vs no Wnt
+# make two columns: Log2 without and Log2 with Wnt treatment
+#df <-  tibble( "Gene" = unique(sub(pattern="_Wnt", x = data_heat$Treatment, replacement = "") ))
+
+
+Wnt <- data_heat %>% dplyr::filter(Wnt == TRUE) %>% dplyr::select(Treatment,Log2)
+noWnt <- data_heat %>% dplyr::filter( Wnt == FALSE) %>% dplyr::select(Treatment,Log2)
+
+
+ggplot(data=Wnt, aes(x=reorder(Treatment, Log2), y=Log2))+
+  geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Calibrated Ratio Wnt stimulated", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+
+
+ggplot(data=noWnt, aes(x=reorder(Treatment, Log2), y=Log2))+
+  geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+
+# 
+# data2<- data_heat %>% dplyr::select(Log2)
+# data3 <- as.matrix(data2)
+# data2_t <- t(data2)
+# #colnames(data2_t) <- data_heat$Treatment
+# # remove Wnt in names
+# colnames(data2_t) <- sub(pattern="_Wnt", x = data_heat$Treatment, replacement = "") 
+# anno_col <- data.frame(row.names = seq.int(from=1, to= length(colnames(data2_t))), "Wnt" = as.numeric(data_heat$Wnt)  )
+# anno_col[anno_col$Wnt == 1, "Wnt"] = "on"
+# anno_col[anno_col$Wnt == 0, "Wnt"] = "off"
+# 
+# rownames(data2_t) <- c("Log2")
+# gp = gpar(fill = "green")
+# pheatmap::pheatmap(data2_t, 
+#                    cluster_row = F,
+#                    cluster_cols = T,
+#                    annotation_col = anno_col,
+#                   
+#                   
+#                    fontsize = 6.5,
+#                    fontsize_row=6, 
+#                    fontsize_col = 6,
+#                    gaps_col=50)
+
+
+```
+
+
+## Without WNT stimulation
+
+```{r no-wnt, dpi=300}
+# select genes
+genes <- c("APC","Topflash","CFC1","B4GALT6", "B4GALT7", "FARP2", "KLHL22", "KIF21A","KRT36","RASAL3", "RIC1", "CEP55","LIMS1","FRMD5","DNAJB14","B4GALT1", "PAQR7","TMEM191B", "px459")
+
+data <- dplyr::filter(data_tibble, Treatment %in% genes)
+
+ p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ 
+ 
+  p <- ggplot(data, aes(x=Treatment, y=RLUC, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated RLUC", x = "Samples", y = "Calibrated RLUC to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ 
+ data <- dplyr::filter(data_tibble, Treatment %in% genes)
+ 
+ p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Log2 Calibrated Ratio", x = "Samples", y = "Log2 Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+```
+
+
+## With Wnt Stimulation
+
+```{r wnt, dpi=300}
+# select genes
+genes_wnt <- c("APC_Wnt","Topflash_Wnt","CFC1_Wnt","B4GALT6_Wnt", "B4GALT7_Wnt", "FARP2_Wnt", "KLHL22_Wnt", "KIF21A_Wnt","KRT36_Wnt","RASAL3_Wnt", "RIC1_Wnt", "CEP55_Wnt","LIMS1_Wnt","FRMD5_Wnt","DNAJB14_Wnt","B4GALT1_Wnt", "PAQR7_Wnt","TMEM191B_Wnt", "px459_Wnt")
+
+data <- dplyr::filter(data_tibble, Treatment %in% genes_wnt)
+
+ p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ # Log 2
+ 
+  p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Log2 Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+  
+ p
+ 
+ 
+ 
+```
+
+
+
+

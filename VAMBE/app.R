@@ -18,6 +18,8 @@
 
 # load packages
 #library(HTqPCR)
+library(Biobase)
+library(RColorBrewer)
 library(shiny)
 library(shinydashboard)
 library(tidyverse)

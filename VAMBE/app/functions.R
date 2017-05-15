@@ -366,7 +366,9 @@ plot_qpcr_normalization <- function(qPCRraw=NULL, qPCRnorm=NULL, refgenes=NULL, 
       main <- paste("ddCT normalization using", paste(refgenes, collapse = ", ") , sep= " ")
     }
     ntarget <- length(featureNames(qPCRraw))
-      
+    
+    # make X and Y values free of infinite stuff
+    
     return(plot(exprs(qPCRraw), exprs(qPCRnorm), pch = 20, main=main,  col = rep(brewer.pal(6, "Spectral"), each = ntarget), xlab=xlab, ylab=ylab))
     
   } else {return()}
@@ -495,7 +497,7 @@ plot_qpcr_qc_pairs <- function(qPCRraw = NULL, qPCRnorm=NULL, title="qPCR Sample
 
 plot_qpcr_qc_pca <- function(qPCRraw = NULL, qPCRnorm=NULL)
 {
-  if(!is.na(qPCRnorm) && !is.na(qPCRnorm) && !is.na(maxCT))
+  if(!is.na(qPCRnorm) && !is.na(qPCRnorm))
   {
     par(mfrow = c(1,2))
     HTqPCR::plotCtPCA(qPCRraw,scale = FALSE)
@@ -825,18 +827,12 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL, qPCRrawu
       ct$value[ct$value >= as.numeric(maxCT)] <- NA
       ct$value[ct$value <= as.numeric(minCT)] <- NA
       
-      print(ct_unfiltered)
-      print(ct)
-      
-      
-      
       tidy_qpcr <- tibble::as_tibble(fData(qPCRnormobject)) %>% dplyr::bind_cols(tibble::as_tibble(rep(HTqPCR::sampleNames(qPCRnormobject)[i], times = nrow(fData(qPCRnormobject))))) %>% dplyr::bind_cols(tibble::as_tibble(HTqPCR::getCt(qPCRnormobject)[,i])) %>% dplyr::bind_cols(ct) %>% dplyr::bind_cols(ct_unfiltered) %>% dplyr::bind_cols(HTqPCR::featureCategory(qPCRnormobject)[i])
       
       tidy_qpcr$File <- input$qpcr_xlsx$name
       
       colnames(tidy_qpcr) <- c("Gene", "Type", "Pos", "Sample" , "Cqnorm", "Cqraw", "Cqunfiltered", "Flagged", "File")
       
-      print(tidy_qpcr)
       
     } else
     {
@@ -867,8 +863,8 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL, qPCRrawu
   tidy_qpcr$SD <- apply(tidy_qpcr,1, function(x){
     
     df_sd <- dplyr::filter(tidy_qpcr, Gene == x["Gene"], Sample == x["Sample"]) %>% dplyr::select(Gene, Cqunfiltered)
-    df_sd$SD <- sd(df_sd$Cqraw, na.rm = TRUE)
-    df_sd$Cqraw <- NULL
+    df_sd$SD <- sd(df_sd$Cqunfiltered, na.rm = TRUE)
+    df_sd$Cqunfiltered <- NULL
     # bind to tmp
     #tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp,unique(df_sd),by = "Gene")
     return(unique(df_sd$SD))
@@ -898,7 +894,7 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL, qPCRrawu
 qpcr_get_analysis <- function(tidydata = NULL, samples = NULL, genes = NULL, calibrator = NULL){
   
   # remove NA
-  tidydata <- tidydata  %>% na.omit()
+  tidydata <- tidydata %>% na.omit()
   
   if(any(is.null(tidydata), is.null(samples), is.null(genes), is.null(calibrator)))
   {
@@ -920,16 +916,16 @@ qpcr_get_analysis <- function(tidydata = NULL, samples = NULL, genes = NULL, cal
       
     })
     
-    df_analysis$FC <- apply(df_analysis, 1, function(x, gene = genes[i]){
+    df_analysis$FC <- apply(df_analysis, 1, function(x, gene = genes[i], division2 = division){
       df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
-      df_tmp$FC <- 2^-(df_tmp$Cqnorm - division$Cqnorm)
+      df_tmp$FC <- 2^-(df_tmp$Cqnorm - division2$Cqnorm)
       return(unique(df_tmp$FC))
       
     })
     
-    df_analysis$FCsem <- apply(df_analysis, 1, function(x, gene = genes[i]){
+    df_analysis$FCsem <- apply(df_analysis, 1, function(x, gene = genes[i], division2 = division){
       df_tmp <- dplyr::filter(tidydata, Sample %in% x["Sample"] & Gene %in% gene)
-      df_tmp$FC <- df_tmp$Cqnorm / division$Cqnorm
+      df_tmp$FC <- df_tmp$Cqnorm / division2$Cqnorm
       SD <- dplyr::filter(tidydata,  Sample %in% x["Sample"] & Gene %in% gene) %>% dplyr::select(SD)
       SD <- unique(SD$SD)
       

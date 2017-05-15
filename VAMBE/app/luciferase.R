@@ -365,7 +365,8 @@ luc_file_data <- reactive({ #input$submit_luc_data,
       plot$data$RLUC.sd[i] <- treatmentgroups$RLUC.sd[treatmentgroups$Treatment == plot$data$Treatment[i]]
     }
     
-    plot$data <- input$luc_xlsx$name
+    plot$data$File <- input$luc_xlsx$name
+    treatmentgroups$File <- input$luc_xlsx$name
     
     # Return data
     out <- list()
@@ -989,10 +990,10 @@ output$luc_calibrated_datatable <- renderDataTable({
   data$Log2 <- log2(data$Divided)
   data_cal <- dplyr::filter(data, Treatment %in% input$luc_analysis_input_calibrate)
   data <- dplyr::filter(data, Treatment %in% input$luc_analysis_input_rawdata)
-  
+  print(data)
   data <- dplyr::bind_rows(data, data_cal)
-  data <- dplyr::select(data, c(1,2,3,4,12,13,7,10))
-  
+  data <- dplyr::select(data, c(1,2,3,4,12,13,7,10,11,14))
+  print(data)
   return(DT::datatable(data, style = "default", class = "display",  options = opts, extensions = ext))
   
   

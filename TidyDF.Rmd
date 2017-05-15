@@ -5,16 +5,24 @@ date: "24 April 2017"
 output:
   html_document:
     fig_width: 10
+    fig.retina: 1
   pdf_document: default
 ---
 
-# Load all CSV files into a single, large tidy tibble
+# Load all files into a single, large tidy tibble
 
 ```{r setup, include=FALSE}
 library(tidyverse)
-# load CSV files
-path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/CSV/HEK/"
-files <- list.files(path = path ,pattern="*.csv")
+
+## INPUTS
+# can be CSV , will be checked by ending
+# load 
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/"
+
+
+# load all files in folder
+# for shiny, this will be replaced by fileinput handle!
+files <- list.files(path = path ,pattern="*.tsv")
 
 for(i in 1:length(files))
 {
@@ -22,16 +30,26 @@ for(i in 1:length(files))
  if(i == 1){
    # initialise
    
-   data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   data_tibble <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   # add file name
+   data_tibble$File <- files[i]
  } else {
    
-   data_tibble <- readr::read_csv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   #data_tibble <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   
+   # add file name
+    data_tibble2 <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+    data_tibble2$File <- files[i]
+    data_tibble <- data_tibble %>% dplyr::bind_rows(data_tibble2)
+    
+    data_tibble2 <- NULL
  } 
   
 }
 
 # remove X1
 data_tibble$X1 <- NULL
+
 
 ```
 
@@ -48,73 +66,200 @@ DT::datatable(data_tibble)
 ```
 
 
-# Make plots
+# Make data and Plots
 
-First we replace numbers to only get back gene symbols.  
-Then we select the genes we want to investigate and plot them without and with 50ng/mL Wnt stimulation.  
+User can select what to plot, all colnames could be selected.
+Morever, user can filter data e.g. by selecting a colname and a value (file = "HCT116_regrwoth.tsv" or Treatment = "APC")
 
 
-```{r makeplots}
-# remove any _3 etc from gene names
 
-data_tibble$Treatment <- sub(pattern = "_\\d{1,2}", replacement = "",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^TOP$", replacement = "Topflash",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^TOP_", replacement = "Topflash",x = data_tibble$Treatment)
+```{r filterdata}
+
+# inputs:
+# colnames is what can be selected
+filtercolumn <- c("Treatment") # File
+
+# filtercriteria needs to be according to selected columns and show which values
+filtercriteria <- as.list(filtercolumn)
+names(filtercriteria) <- filtercolumn
+
+filtercompare <- as.list(filtercolumn)
+names(filtercompare) <- filtercolumn
+
+filtercompare["Treatment"] <- "%in%"
+#filtercompare["File"] <- "%in%"
+
+filtercriteria[["Treatment"]] <- c("DNAJB14")
+#filtercriteria[["File"]] <- c("HCT116_regrowth.tsv","HEK_regrowth.tsv")
+
+# now we filter!
+for(i in 1:length(filtercolumn))
+{
+ # check if multiple arguments are passed on for filtering
+  if(length(filtercriteria[[filtercolumn[i]]]) == 1)
+    {
+      if(i == 1)
+      {
+        df_filtered <- NULL
+        df_filtered <- data_tibble %>% dplyr::filter_(.dots = paste0(filtercolumn[i], filtercompare[[filtercolumn[i]]], "'", filtercriteria[[filtercolumn[i]]], "'"))
+      } else {
+            df_filtered <- df_filtered %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]], "'"))
+      }
+    } else {
+      
+      df_filtered2 <- ""
+      # multiple filters at once, so we go through it and then bind data at the end
+      for(u in 1:length(filtercriteria[[filtercolumn[i]]]))
+      {
+        print(u)
+        if(u == 1)
+        {
+          if(i==1)
+          {
+            df_filtered2 <- data_tibble %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]][u], "'"))
+          } else {
+            df_filtered2 <- df_filtered %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]][u], "'"))
+          }
+          
+        } else {
+          # in case we are still at the first filter, we need to go from no filtering data first!
+          if(i==1)
+          {
+            df_filtered2 <- data_tibble %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]][u], "'")) %>% dplyr::bind_rows(df_filtered2)
+          } else {
+            df_filtered2 <- df_filtered %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]][u], "'")) %>% dplyr::bind_rows(df_filtered2)
+          }
+          
+          
+df_filtered2 <- df_filtered %>% dplyr::filter_(.dots = paste0(filtercolumn[i],  filtercompare[[filtercolumn[i]]] , "'", filtercriteria[[filtercolumn[i]]][u], "'")) %>% dplyr::bind_rows(df_filtered2)
+        }
+
+      }
+      df_filtered <- df_filtered2
+    }
+  
+}
+
+
+
+
 
 ```
 
-## Without WNT stimulation
 
-```{r no-wnt, dpi=300}
-# select genes
-genes <- c("APC","Topflash","CFC1","B4GALT6", "B4GALT7", "FARP2", "KLHL22", "KIF21A","KRT36","RASAL3", "RIC1", "CEP55","LIMS1","FRMD5","DNAJB14","B4GALT1", "PAQR7","TMEM191B", "px459")
+# Show Tidy Data
 
-data <- dplyr::filter(data_tibble, Treatment %in% genes)
+```{r savetidy}
 
- p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
-    geom_boxplot() +
-    geom_jitter(shape=16, position=position_jitter(0.2)) +
-    labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
-    ggplot2::theme_minimal() +
-    ggplot2::geom_hline(yintercept = 1) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+filename <- "DATA_exported"
+  opts <- list( dom = "Bflrtip",
+                lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
+                pageLength = 15, scrollX = FALSE)
+  opts[["order"]] <- NULL
+  opts[["buttons"]] <- list("copy","print", list("extend" = 'csv', "text"='csv', "filename" = filename, "title" = filename), list("extend" = 'excel', "text"='Excel', "filename" = filename, "title" = filename), list("extend" = 'pdf', "text"='pdf', "filename" = filename, "title" = filename))#buttons
   
- p
+  ext <- character(0)
+  ext <- c(ext, "Buttons")
+  ext <- c(ext, "Responsive")
+  
+  DT::datatable(df_filtered, style = "default", class = "display",  options = opts, extensions = ext)
+```
+
+# Create Plots
+
+```{r heatmap, fig.keep=TRUE, dpi=300, dev="png", fig.ext=".png"}
+
+# data in df_filtered
+
+# Inputs
+
+# all colnames as information or group by
+plotx <- "File"
+ploty <- "Log2"
+plotfill <- "Treatment"
+
+plotgeom <- "geom_boxplot" # c("")
+plottheme <- "theme_bw" # c("")
+plotjitter <- FALSE # FALSE
+
+plotline <- list(y = 0, x= NULL)
+
+legend <- "bottom" # c("none", "bottom", "top", "right", "left")
+
+
+main <- "WntActivity calibrated to CTRL"
+xmain <- "Assay"
+ymain <- "Log2 Calibrated Wnt Activity"
+
+
+# make default plot
+g <- ggplot2::ggplot(data=df_filtered, aes_string(x=plotx, y=ploty, fill=plotfill))
+
+# add geom1
+g <- g + eval(call(plotgeom))
+# add jitter
+if(plotjitter)
+{
+ g <- g + geom_jitter(shape=16, position=position_jitter(0.2)) 
+}
+# add theme
+g <- g + eval(call(plottheme))
+# add line?
+if(!is.null(plotline))
+{
+  if(!is.null(plotline$y))
+  {
+    g <- g + ggplot2::geom_hline(yintercept = plotline$y)
+  }
+  
+  if(!is.null(plotline$x))
+  {
+    g <- g + ggplot2::geom_abline(xintercept = plotline$x)
+  }
+  
+}
+# add title, subtitle, axis labels
+g <- g + labs(title = main, x = xmain, y = ymain) 
+# add legend?
+g <- g + theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position=legend)
+
+ggsave(filename = paste0(paste(filtercriteria[["Treatment"]], collapse = "-"), ".png"),plot = g,device = "png",dpi = 300)
+
+
+
+
 ```
 
 
-## With Wnt Stimulation
 
-```{r wnt, dpi=300}
-# select genes
-genes_wnt <- c("APC_Wnt","Topflash_Wnt","CFC1_Wnt","B4GALT6_Wnt", "B4GALT7_Wnt", "FARP2_Wnt", "KLHL22_Wnt", "KIF21A_Wnt","KRT36_Wnt","RASAL3_Wnt", "RIC1_Wnt", "CEP55_Wnt","LIMS1_Wnt","FRMD5_Wnt","DNAJB14_Wnt","B4GALT1_Wnt", "PAQR7_Wnt","TMEM191B_Wnt", "px459_Wnt")
+```{r}
 
-data <- dplyr::filter(data_tibble, Treatment %in% genes_wnt)
 
- p <- ggplot(data, aes(x=Treatment, y=Divided, fill=Treatment)) + 
-    geom_boxplot() +
+
+ggplot(data=df_filtered, aes(x=File, y=Log2))+
+  geom_boxplot() +
     geom_jitter(shape=16, position=position_jitter(0.2)) +
-    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Calibrated Ratio to CTRL") +
-    ggplot2::theme_minimal() +
-    ggplot2::geom_hline(yintercept = 1) +
+  labs(title = "Calibrated Ratio Wnt stimulated", x = "Samples", y = "Calibrated Ratio to CTRL") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
-  
- p
- 
- # Log 2
- 
-  p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
-    geom_boxplot() +
+
+
+ggplot(data=noWnt, aes(x=reorder(Treatment, Log2), y=Log2))+
+  geom_boxplot() +
     geom_jitter(shape=16, position=position_jitter(0.2)) +
-    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Calibrated Ratio to CTRL") +
+  labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
     ggplot2::theme_minimal() +
     ggplot2::geom_hline(yintercept = 0) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
-  
- p
- 
- 
- 
-```
 
+ p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
+    geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Log2 Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+
+```
 

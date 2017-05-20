@@ -214,125 +214,125 @@ output$qpcr_data_filename <- renderUI({
 })
 
 
-qpcr_file_data <- reactive({ #input$submit_qpcr_data, 
-  shiny::validate(
-    shiny::need(!is.null(qpcr_file_xlsx), message = "Please upload a valid XLSX file first"),
-    shiny::need(qpcr_file_xlsx, message = "Please upload a valid XLSX file first")
-  )
-  
-  error$qpcr_data_error <- FALSE
-  
-  if(is.null(input$qpcr_data) || input$qpcr_data =="")
-  {return(NULL)}
-  else
-  {
-    # read data file
-    file.read <- try(readr::read_tsv(file = input$qpcr_data$datapath, col_names = c("SamplePos","SampleName","Prog","Seg","Cycle","Time","Temp","483-533"), skip = 2))
-    
-    if(class(file.read) == "try-error")
-    {
-      error$qpcr_data_error <- TRUE
-      print("File not found or does not match Lightcycler Raw Data file structure.")
-    }
-    
-    # convert to qpcR format flat file
-    ## each row -> CYCLE
-    ## each column -> Well
-    df.pcr <- NULL
-    ## make new tibble with maximum number of cycles
-    df.pcr <- try(tibble::tibble("Cycles" = seq(from = min(file.read[,"Cycle"]), to = max(file.read[,"Cycle"]), by =1)))
-    
-    if(class(df.pcr) == "try-error")
-    {
-      error$qpcr_data_error <- TRUE
-      print("File not found or does not match Lightcycler Raw Data file structure.")
-      shinyBS::toggleModal(session, "qpcr_data_error_modal", toggle = "open")
-      return(NULL)
-    }
-    
-    ## Add names (unique ones of course) as columns, so we first make data frame for each Well that contains cycles 1-x and the 483-533 value
-    wells <- NULL
-    
-    wells <- as.list(unique(file.read$SamplePos))
-    names(wells) <- unique(file.read$SamplePos)
-    
-    # make df.data with all data information and put this to df.pcr
-    df.data <- lapply(wells, function(x){
-      # get subset
-      subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 2)  %>% dplyr::select( 5, 8)
-      # Get column 483-533
-      #subset <- dplyr::select(subset, 5, 8)
-      colnames(subset) <- c("Cycles",as.character(x))
-      # Add to tibble
-      df.pcr <<- dplyr::left_join(df.pcr, subset, by = "Cycles")
-      return(subset)
-      
-    })
-    
-    df.data <- NULL
-    
-    
-    # create tibble with melting curve information
-    ## get melting curve information (Prog == 3 in data)
-    df.melting <- NULL
-    df.melting <- tibble::tibble("Temp" = unique(file.read[file.read$Prog == 3, "Temp"]$Temp))
-    if(nrow(df.melting) <= 10)
-    {
-      df.melting <- NULL
-    }
-    #t <- dplyr::filter(file.read, SamplePos == "A1" & Prog == 3)  %>% dplyr::select( 7, 8)
-    #df.melting <<- dplyr::left_join(df.melting, t, by = "Temp")
-    
-    
-    df.data <- lapply(wells, function(x){
-      # get subset
-      subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 3)  %>% dplyr::select( 7, 8)
-      # Get column 483-533
-      #subset <- dplyr::select(subset, 5, 8)
-      colnames(subset) <- c("Temp", as.character(x))
-      # Add to tibble
-      df.melting <<- dplyr::left_join(df.melting, subset, by = "Temp")
-      return(subset)
-      
-    })
-    
-    # get real melting stuff
-    for(i in 2:ncol(df.melting))
-    {
-      if(i == 2)
-      {
-        df.melting2 <- dplyr::select(df.melting, Temp, i)
-        colnames(df.melting2) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
-      } else {
-        df.binding <- dplyr::select(df.melting, Temp, i)
-        colnames(df.binding) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
-        df.melting2 <- dplyr::bind_cols(df.melting2, df.binding) 
-        df.binding <- NULL
-      }
-    }
-    
-    
-    
-    # Return data structures
-    out <- list(
-      "success" = TRUE,
-      "pcr" = df.pcr,
-      "melting" = df.melting2,
-      "wells" = wells
-    )
-    shinyjs::enable("qpcr_start_calculation")
-    
-    return(out)
-    
-  }
-  
-  
-})
+# qpcr_file_data <- reactive({ #input$submit_qpcr_data, 
+#   shiny::validate(
+#     shiny::need(!is.null(qpcr_file_xlsx), message = "Please upload a valid XLSX file first"),
+#     shiny::need(qpcr_file_xlsx, message = "Please upload a valid XLSX file first")
+#   )
+#   
+#   error$qpcr_data_error <- FALSE
+#   
+#   if(is.null(input$qpcr_data) || input$qpcr_data =="")
+#   {return(NULL)}
+#   else
+#   {
+#     # read data file
+#     file.read <- try(readr::read_tsv(file = input$qpcr_data$datapath, col_names = c("SamplePos","SampleName","Prog","Seg","Cycle","Time","Temp","483-533"), skip = 2))
+#     
+#     if(class(file.read) == "try-error")
+#     {
+#       error$qpcr_data_error <- TRUE
+#       print("File not found or does not match Lightcycler Raw Data file structure.")
+#     }
+#     
+#     # convert to qpcR format flat file
+#     ## each row -> CYCLE
+#     ## each column -> Well
+#     df.pcr <- NULL
+#     ## make new tibble with maximum number of cycles
+#     df.pcr <- try(tibble::tibble("Cycles" = seq(from = min(file.read[,"Cycle"]), to = max(file.read[,"Cycle"]), by =1)))
+#     
+#     if(class(df.pcr) == "try-error")
+#     {
+#       error$qpcr_data_error <- TRUE
+#       print("File not found or does not match Lightcycler Raw Data file structure.")
+#       shinyBS::toggleModal(session, "qpcr_data_error_modal", toggle = "open")
+#       return(NULL)
+#     }
+#     
+#     ## Add names (unique ones of course) as columns, so we first make data frame for each Well that contains cycles 1-x and the 483-533 value
+#     wells <- NULL
+#     
+#     wells <- as.list(unique(file.read$SamplePos))
+#     names(wells) <- unique(file.read$SamplePos)
+#     
+#     # make df.data with all data information and put this to df.pcr
+#     df.data <- lapply(wells, function(x){
+#       # get subset
+#       subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 2)  %>% dplyr::select( 5, 8)
+#       # Get column 483-533
+#       #subset <- dplyr::select(subset, 5, 8)
+#       colnames(subset) <- c("Cycles",as.character(x))
+#       # Add to tibble
+#       df.pcr <<- dplyr::left_join(df.pcr, subset, by = "Cycles")
+#       return(subset)
+#       
+#     })
+#     
+#     df.data <- NULL
+#     
+#     
+#     # create tibble with melting curve information
+#     ## get melting curve information (Prog == 3 in data)
+#     df.melting <- NULL
+#     df.melting <- tibble::tibble("Temp" = unique(file.read[file.read$Prog == 3, "Temp"]$Temp))
+#     if(nrow(df.melting) <= 10)
+#     {
+#       df.melting <- NULL
+#     }
+#     #t <- dplyr::filter(file.read, SamplePos == "A1" & Prog == 3)  %>% dplyr::select( 7, 8)
+#     #df.melting <<- dplyr::left_join(df.melting, t, by = "Temp")
+#     
+#     
+#     df.data <- lapply(wells, function(x){
+#       # get subset
+#       subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 3)  %>% dplyr::select( 7, 8)
+#       # Get column 483-533
+#       #subset <- dplyr::select(subset, 5, 8)
+#       colnames(subset) <- c("Temp", as.character(x))
+#       # Add to tibble
+#       df.melting <<- dplyr::left_join(df.melting, subset, by = "Temp")
+#       return(subset)
+#       
+#     })
+#     
+#     # get real melting stuff
+#     for(i in 2:ncol(df.melting))
+#     {
+#       if(i == 2)
+#       {
+#         df.melting2 <- dplyr::select(df.melting, Temp, i)
+#         colnames(df.melting2) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+#       } else {
+#         df.binding <- dplyr::select(df.melting, Temp, i)
+#         colnames(df.binding) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+#         df.melting2 <- dplyr::bind_cols(df.melting2, df.binding) 
+#         df.binding <- NULL
+#       }
+#     }
+#     
+#     
+#     
+#     # Return data structures
+#     out <- list(
+#       "success" = TRUE,
+#       "pcr" = df.pcr,
+#       "melting" = df.melting2,
+#       "wells" = wells
+#     )
+#     shinyjs::enable("qpcr_start_calculation")
+#     
+#     return(out)
+#     
+#   }
+#   
+#   
+# })
 
 
 # Observe
 observe(qpcr_file_xlsx())
-observe(qpcr_file_data())
+# observe(qpcr_file_data())
 
 
 
@@ -345,8 +345,9 @@ observe(qpcr_file_data())
   shiny::validate(
     shiny::need(input$qpcr_normalize_method, "Please select a normaliation method"),
     shiny::need(input$qpcr_cq_method, "Please select a Cq calculation method"),
+    shiny::need(input$qpcr_data, "Please upload a data file"),
     shiny::need(qpcr_file_xlsx, "Please upload XLSX file"),
-    shiny::need(qpcr_file_data, "Please upload data file"),
+    #shiny::need(qpcr_file_data, "Please upload data file"),
     shiny::need(input$minCT, "Please select CQ thresholds"),
     shiny::need(input$maxCT, "Please select CQ thresholds"),
     shiny::need(input$qpcr_input_control, "Please select a control")
@@ -354,16 +355,121 @@ observe(qpcr_file_data())
   
   
   
-  if(qpcr_file_data()$success)
-  {
+  # if(qpcr_file_data()$success)
+  # {
     
+   error$qpcr_data_error <- FALSE
+     # read data file
+   print("Read file")
+     file.read <- try(readr::read_tsv(file = input$qpcr_data$datapath, col_names = c("SamplePos","SampleName","Prog","Seg","Cycle","Time","Temp","483-533"), skip = 2))
+     
+     if(class(file.read) == "try-error")
+     {
+       error$qpcr_data_error <- TRUE
+       print("File not found or does not match Lightcycler Raw Data file structure.")
+     }
+     
+     # convert to qpcR format flat file
+     ## each row -> CYCLE
+     ## each column -> Well
+     df.pcr <- NULL
+     ## make new tibble with maximum number of cycles
+     df.pcr <- try(tibble::tibble("Cycles" = seq(from = min(file.read[,"Cycle"]), to = max(file.read[,"Cycle"]), by =1)))
+     
+     if(class(df.pcr) == "try-error")
+     {
+       error$qpcr_data_error <- TRUE
+       print("File not found or does not match Lightcycler Raw Data file structure.")
+       shinyBS::toggleModal(session, "qpcr_data_error_modal", toggle = "open")
+       return(NULL)
+     }
+     
+     ## Add names (unique ones of course) as columns, so we first make data frame for each Well that contains cycles 1-x and the 483-533 value
+     wells <- NULL
+     
+     wells <- as.list(unique(file.read$SamplePos))
+     names(wells) <- unique(file.read$SamplePos)
+     print("lapply wells")
+     # make df.data with all data information and put this to df.pcr
+     df.data <- lapply(wells, function(x){
+       # get subset
+       subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 2)  %>% dplyr::select( 5, 8)
+       # Get column 483-533
+       #subset <- dplyr::select(subset, 5, 8)
+       colnames(subset) <- c("Cycles",as.character(x))
+       # Add to tibble
+       df.pcr <<- dplyr::left_join(df.pcr, subset, by = "Cycles")
+       return(subset)
+       
+     })
+     
+     df.data <- NULL
+     
+     
+     # create tibble with melting curve information
+     ## get melting curve information (Prog == 3 in data)
+     df.melting <- NULL
+     df.melting <- tibble::tibble("Temp" = unique(file.read[file.read$Prog == 3, "Temp"]$Temp))
+     if(nrow(df.melting) <= 10)
+     {
+       df.melting <- NULL
+     }
+     #t <- dplyr::filter(file.read, SamplePos == "A1" & Prog == 3)  %>% dplyr::select( 7, 8)
+     #df.melting <<- dplyr::left_join(df.melting, t, by = "Temp")
+     
+     print("lapply wells 2 for df.melting")
+     
+     
+     
+      df.tmp <- lapply(wells, function(x){
+       # get subset
+       subset <- dplyr::filter(file.read, SamplePos == as.character(x) & Prog == 3)  %>% dplyr::select(8)
+       # Get column 483-533
+       #subset <- dplyr::select(subset, 5, 8)
+       colnames(subset) <- c(as.character(x))
+       # Add to tibble
+       return(subset)
+       #df.melting <<- dplyr::left_join(df.melting, subset, by = "Temp")
+       #subset <- NULL
+     })
+    
+      meltlen <- nrow(df.melting)
+      for(i in 1:length(df.tmp))
+      {
+        #df.melting <- dplyr::inner_join(df.melting, df.tmp[[i]], by = "Temp")
+        if(nrow(df.tmp[[i]]) != meltlen)
+        {
+          df.tmp[[i]] <- df.tmp[[i]][1:meltlen,]
+        }
+        df.melting <- dplyr::bind_cols(df.melting, df.tmp[[i]])
+      }
+     
+     df.binding <- NULL
+     df.melting2 <- NULL
+     # get real melting stuff
+     for(i in 2:ncol(df.melting))
+     {
+       if(i == 2)
+       {
+         df.melting2 <- dplyr::select(df.melting, Temp, i)
+         colnames(df.melting2) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+       } else {
+         df.binding <- dplyr::select(df.melting, Temp, i)
+         colnames(df.binding) <- c(paste("Temp",i, sep="_"), colnames(df.melting)[i])
+         df.melting2 <- dplyr::bind_cols(df.melting2, df.binding) 
+         df.binding <- NULL
+       }
+     }
+   
+   
     # Disble button
     shinyjs::disable("qpcr_start_calculation")
     shinyjs::enable("qpcr_reset_calculation")
     
-    # Calculate CQ
-    cq <- calculate_cq(df.pcr = qpcr_file_data()$pcr, cq_calc_method = input$qpcr_cq_method)
     
+    # Calculate CQ
+    #cq <- calculate_cq(df.pcr = qpcr_file_data()$pcr, cq_calc_method = input$qpcr_cq_method)
+    cq <- calculate_cq(df.pcr, cq_calc_method = input$qpcr_cq_method)
 
     # write calc list wiht all cq values to a tibble for htqpcr
     cq1 <- lapply(cq,function(x){
@@ -412,10 +518,9 @@ observe(qpcr_file_data())
     
     n_features <- nrow(dplyr::filter(df_samples, Sample == n_samples$Files[1]) %>% dplyr::select(Position))
     # 
-    print("5")
+    
     for(i in 1:length(n_samples$Files))
     {
-      print(paste("6", i, sep="-") )
       fullplate_df <- NULL
       pos1 <- dplyr::filter(df_samples, Sample == n_samples$Treatment[i]) %>% dplyr::select( Position)
       fullplate_df <- tibble("Position" = pos1$Position)
@@ -427,11 +532,11 @@ observe(qpcr_file_data())
       fullplate_df <- dplyr::arrange(fullplate_df,Type)
       #readr::write_tsv(x = dplyr::filter(output_cqdata, Sample == n_samples[i]), path = file.path(getwd(), n_samples[i]), col_names = FALSE)
       #print(file.path(config$userDir, n_samples$Treatment[i]))
+      system2(command = "rm", args = c("-f",  file.path(config$userDir, n_samples$Treatment[i]) ))
       readr::write_tsv(x = fullplate_df, path = file.path(config$userDir, n_samples$Treatment[i]), col_names = FALSE, append = FALSE)
     }
     
     # config$userDir
-    print("7")
     # read back in for htqpcr as qcprdataset
     qPCRraw <- try(HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features))
     # 
@@ -459,7 +564,6 @@ observe(qpcr_file_data())
     #                                   }
     #                                 })
     # fData(qPCRraw) <- df_feature
-    print("8")
     ## FLAG and FILTER
     qPCRraw <- try(HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE))
     
@@ -467,7 +571,6 @@ observe(qpcr_file_data())
     {
       return(NA)
     }
-    print("9")
     # get rid of values that are 40
     df_ct <- HTqPCR::getCt(qPCRraw)
     df_ct_cols <- colnames(df_ct)
@@ -475,7 +578,6 @@ observe(qpcr_file_data())
     {
       df_ct[df_ct[,i] >=40,i] <- NA
     }
-    print("10")
     #setCt(qPCRraw) <- df_ct
     qPCRraw_unfiltered <- qPCRraw
     qPCRraw <- try(HTqPCR::filterCategory(qPCRraw))
@@ -483,18 +585,14 @@ observe(qpcr_file_data())
     {
       return(NA)
     }
-    print("11")
     # Normalize
     qPCRnorm <- try(HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes))
     if(class(qPCRnorm) == "try-error")
     {
       return(NA)
     }
-    print("12")
     # make tidy data
     qpcr_tidy <- qpcr_tidy_calc(qPCRnormobject = qPCRnorm, qPCRrawobject = qPCRraw, qPCRrawunfiltered = qPCRraw_unfiltered, minCT = as.numeric(input$minCT), maxCT = as.numeric(input$maxCT), file = input$qpcr_xlsx$name)
-    
-    print("13")
     
     ###### data structures to use
     # qPCRraw <- rawdata qPCR for HTqPCR
@@ -507,23 +605,27 @@ observe(qpcr_file_data())
       "qPCRraw" = qPCRraw,
       "qPCRnorm" = qPCRnorm,
       "tidy" = qpcr_tidy,
-      "cq" = cq
+      "cq" = cq,
+      "success" = TRUE,
+      "pcr" = df.pcr,
+      "melting" = df.melting2,
+      "wells" = wells
     )
     
     shinyBS::toggleModal(session, "qpcr_data_calc_modal", toggle = "open")
     
     
     
-  } else {
-    out <- list(
-      "qPCRraw_unfiltered" = NA,
-      "qPCRraw" = NA,
-      "qPCRnorm" = NA,
-      "tidy" = NA
-    )
-    shinyBS::toggleModal(session, "qpcr_data_error_modal", toggle = "open")
-    
-  }
+  # } else {
+  #   out <- list(
+  #     "qPCRraw_unfiltered" = NA,
+  #     "qPCRraw" = NA,
+  #     "qPCRnorm" = NA,
+  #     "tidy" = NA
+  #   )
+  #   shinyBS::toggleModal(session, "qpcr_data_error_modal", toggle = "open")
+  #   
+  # }
    return(out)
 })
 
@@ -897,7 +999,8 @@ output$DL_qpcr_qc_plot_heatmap_norm <- downloadHandler(
 output$qpcr_qc_meltcurve <- renderPlot({
   shiny::validate(
     shiny::need(qpcr_file_xlsx, "Please upload data" ),
-    shiny::need(qpcr_file_data, "Please upload data" ),
+    #shiny::need(qpcr_file_data, "Please upload data" ),
+    shiny::need(qpcr_data, "Please upload data" ),
     shiny::need(input$qpcr_input_meltcurve_target, "Please select genes" )
   )
   
@@ -906,10 +1009,10 @@ output$qpcr_qc_meltcurve <- renderPlot({
   wells <- dplyr::filter(qpcr_file_xlsx()$df_samples, Type %in% input$qpcr_input_meltcurve_target) %>% dplyr::select(Position)
 
   # get the column position in qpcr_file_data()$melting
-  wellsmatch <- match(wells$Position ,colnames(qpcr_file_data()$melting))
+  wellsmatch <- match(wells$Position ,colnames(qpcr_data()$melting))
   
   # create plot
-  qpcR::meltcurve(data = as.data.frame(qpcr_file_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
+  qpcR::meltcurve(data = as.data.frame(qpcr_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
   
 })
 
@@ -917,7 +1020,8 @@ output$qpcr_qc_meltcurve <- renderPlot({
 output$qpcr_qc_fluorescencecurve <- renderPlot({
   shiny::validate(
     shiny::need(qpcr_file_xlsx, "Please upload data" ),
-    shiny::need(qpcr_file_data, "Please upload data" ),
+    shiny::need(qpcr_data, "Please run the calculation" ),
+    shiny::need(input$qpcr_cq_method, "Please select a Cq calculation method"),
     shiny::need(qpcr_data, "Please upload data" ),
     shiny::need(input$qpcr_input_meltcurve_target, "Please select genes" )
   )
@@ -928,15 +1032,15 @@ output$qpcr_qc_fluorescencecurve <- renderPlot({
   wells <- wells$Position
   # get the column position in qpcr_file_data()$melting
   #wellsmatch <- match(wells$Position ,colnames(qpcr_file_data()$melting))
-  print(wells)
+  # print(wells)
   
   # create plot
   l <- length(wells)
   par(mfrow = n2mfrow(l) )
   for(i in 1:l)
   {
-    print(qpcr_data()$cq[[wells[i]]]$fitted)
-    try(qpcR::efficiency(qpcr_data()$cq[[wells[i]]]$fitted, plot=TRUE, type = "Cy0"))
+    #print(qpcr_data()$cq[[wells[i]]]$fitted)
+    try(qpcR::efficiency(qpcr_data()$cq[[wells[i]]]$fitted, plot=TRUE, type = input$qpcr_cq_method))
   }
   
   #qpcR::meltcurve(data = as.data.frame(qpcr_file_data()$melting), temps = wellsmatch-1, fluos = wellsmatch, plot = TRUE)
@@ -955,11 +1059,12 @@ output$qpcr_qc_fluorescencecurve <- renderPlot({
 
 output$qpcr_analysis_plot_cq <- renderPlot({
   shiny::validate(
-    shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation")
+    shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation"),
+    shiny::need(input$qpcr_input_analysis_samples, "Please select a sample")
   )
   
   
-  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, yval = "Cqraw")
+  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, samples = input$qpcr_input_analysis_samples, yval = "Cqraw")
   
 })
 
@@ -968,7 +1073,7 @@ output$DL_qpcr_analysis_plot_cq <- downloadHandler(
     paste('qPCR_Analysis_Cq_', paste(input$qpcr_input_analysis_target, collapse = "-") , ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, yval = "Cqraw"), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot =  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, samples = input$qpcr_input_analysis_samples, yval = "Cqraw"), units="cm", height = 10, width=25, dpi = 600)
     
     
   }
@@ -980,7 +1085,7 @@ output$qpcr_analysis_plot_ddcq <- renderPlot({
     shiny::need(qpcr_analysis_data()$tidy, "Please run the calculation")
   )
   
-  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target, refgenes = input$qpcr_refgenes, yval = "Cqnorm")
+  plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target,samples = input$qpcr_input_analysis_samples, refgenes = input$qpcr_refgenes, yval = "Cqnorm")
   
 })
 
@@ -989,7 +1094,7 @@ output$DL_qpcr_analysis_plot_ddcq <- downloadHandler(
     paste('qPCR_Analysis_ddCq_', paste(input$qpcr_input_analysis_target, collapse = "-") , ".png", sep="")
   },
   content = function(con) {
-    ggplot2::ggsave(filename = con, device= "png" , plot = plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target,refgenes = input$qpcr_refgenes, yval = "Cqnorm"), units="cm", height = 10, width=25, dpi = 600)
+    ggplot2::ggsave(filename = con, device= "png" , plot = plot_qpcr_analysis_CQ(data = qpcr_analysis_data()$tidy, target = input$qpcr_input_analysis_target,samples = input$qpcr_input_analysis_samples, refgenes = input$qpcr_refgenes, yval = "Cqnorm"), units="cm", height = 10, width=25, dpi = 600)
     
     
   }
@@ -1070,10 +1175,11 @@ output$DL_qpcr_analysis_plot_calibrated_log10 <- downloadHandler(
 ## Datatable Output
 output$qpcr_xlsx_rawdata <- renderDataTable({
   shiny::validate(
+    shiny::need(input$qpcr_xlsx$name, "Please upload Data"),
     shiny::need(qpcr_file_xlsx()$df_samples, message = "No Data Available")
   )
   
-  filename <- paste(paste("qPCR_Rawdata") )
+  filename <- paste(input$qpcr_xlsx$name, "rawdata", sep="_" )
   opts <- list( dom = "Bflrtip",
                 lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
                 pageLength = 15, scrollX = FALSE)
@@ -1095,10 +1201,11 @@ output$qpcr_xlsx_rawdata <- renderDataTable({
 ## Tidy normalized data
 output$qpcr_tidydata <- renderDataTable({
   shiny::validate(
+    shiny::need(input$qpcr_xlsx$name, "Please upload Data"),
     shiny::need(qpcr_data()$tidy, message = "No Data Available")
   )
   
-  filename <- paste("qPCR_data_tidy")
+  filename <- paste(input$qpcr_xlsx$name, "_data_tidy", sep="")
   opts <- list( dom = "Bflrtip",
                 lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
                 pageLength = 15, scrollX = FALSE)
@@ -1119,10 +1226,11 @@ output$qpcr_tidydata <- renderDataTable({
 ## Tidy calibrated data
 output$qpcr_analysis_calibrated_table <- renderDataTable({
   shiny::validate(
+    shiny::need(input$qpcr_xlsx$name, "Please upload Data"),
     shiny::need(qpcr_analysis_data()$df_analysis, message = "No Data Available")
   )
   
-  filename <- paste("qPCR_data_calibrated_tiy")
+  filename <- paste(input$qpcr_xlsx$name,"data_calibrated_tidy", sep="_")
   opts <- list( dom = "Bflrtip",
                 lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
                 pageLength = 15, scrollX = FALSE)
@@ -1283,16 +1391,12 @@ qpcr_analysis_data <- reactive({
   # all data is there
   tidy <- TRUE
   
-  print(qpcr_data()$tidy)
+  #print(qpcr_data()$tidy)
   df_analysis <- try(qpcr_get_analysis(tidydata = qpcr_data()$tidy, samples = input$qpcr_input_analysis_samples, genes = input$qpcr_input_analysis_target, calibrator = input$qpcr_input_analysis_calibrator))
-  
-  print(class(df_analysis))
-  
   
   out$tidy <- qpcr_data()$tidy
   out$df_analysis <- df_analysis
   
-  print(out$df_analysis)
   
   return(out)
   

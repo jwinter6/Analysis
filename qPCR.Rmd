@@ -54,11 +54,11 @@ calibrator <- "GAPDH"
 
 #qPCR rawdata
 #file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/data/JW_20170321_qPCR_TestPrimer.txt"
-file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-14_HEK_BCAT-Wnt_GSK/2017-04-14_JW_FOLLOWUP_HEK_px459-BCAT-WNT-GSK.txt"
+file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-27_HEKTCF_RLUC-noRTAPC-KLHL22-B4GALT6/2017-04-27_JW_FOLLOWUP_HEK_RLUC-noRTAPC-KLHL22-B4GALT6.txt"
 
 # XSLX overview file
 #file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
-file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-14_HEK_BCAT-Wnt_GSK/qPCR_Overview_MASTER.xlsx"
+file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-27_HEKTCF_RLUC-noRTAPC-KLHL22-B4GALT6/qPCR_Overview_MASTER.xlsx"
 
 # read file data 
 ## use roche lightcycler defaults
@@ -382,13 +382,15 @@ for(i in 1:length(calc))
       } else {
     # fitting worked
         out$fitted <- fitted
-        efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = "Cy0"))
+        efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type="cpD2"))
         #efficiencyLRE = try(qpcR::LRE(out$fitted, plot=FALSE))
-        if(class(efficiency) == "try-error")
+        if(class(efficiency) == "try-error" || length(efficiency$eff) > 1 || is.na(efficiency$eff) ) #|| length(efficiency$eff) > 1 || is.na(efficiency$eff)
         {
+          # check if there is only 1 efficiency value (should be) and if it is not NA, otherwise set all to NA
           out$efficiency <- NA
           out$cq <- NA
         } else {
+
           out$efficiency <- efficiency
            # Fourth: get calculated Cq or calculate Cq for Cy0
       if(cq_calc_method == "Cy0")
@@ -412,10 +414,11 @@ for(i in 1:length(calc))
 }
   
   
-plot(calc$A2$fitted)
-calc$A1$efficiency
+plot(calc$D10$fitted)
+calc$D10$fitted
+calc$D10$efficiency
 
-qpcR::efficiency(calc[[c("A1")]]$fitted, plot=TRUE, type = "Cy0")
+qpcR::efficiency(calc[[c("D10")]]$fitted, plot=TRUE, type = "Cy0")
 
 #calc
 ```

@@ -22,7 +22,7 @@ KLHL22_GTCACGCAGTGTGGGTGTGA | 11 | 118928357 | 118928380 | ENSG00000110375::UPK2
 library(tidyverse)
 
 path <- "/Users/janwinter/Downloads"
-file <- "KLHL22_results.tab"
+file <- "CEP55_ECRISP.tab"
 
 # load data as TIBBLE (data frame) with column names
 ecrisp_table <- read_tsv(file = file.path(path,file), col_names = TRUE)

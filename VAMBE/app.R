@@ -47,17 +47,6 @@ config <- list()
 config$mainDir <- "."
 config$appDir <- file.path(config$mainDir, "app")
 
-# create userDir
-startTime <- Sys.time()
-config$userID <- paste0(format(startTime, format = "%y%m%d_%H%M%S_"), paste(sample(0:9, 4), collapse = ""))
-config$userDir <- file.path(config$mainDir, config$userID)
-
-dir.create(config$userDir)
-
-# make chmod 777 for created dir
-system2(command = "chmod", args = c("-R", "777", config$userDir))
-
-
 
 
 # Define UI for application that draws a histogram
@@ -244,6 +233,17 @@ server <- function(input, output, session) {
   
   cData <- session$clientData
   
+  # create userDir
+  startTime <- Sys.time()
+  config$userID <- paste0(format(startTime, format = "%y%m%d_%H%M%S_"), paste(sample(0:9, 4), collapse = ""))
+  config$userDir <- file.path(config$mainDir, config$userID)
+  
+  dir.create(config$userDir)
+  
+  # make chmod 777 for created dir
+  system2(command = "chmod", args = c("-R", "777", config$userDir))
+  
+  
   # once session is done, remove config$userDir
   session$onSessionEnded(function() {
     print(paste("remove UserDirectory: ", file.path(config$mainDir, config$userID)))
@@ -263,7 +263,6 @@ server <- function(input, output, session) {
   
     # load qPCR module
   
-  shinyjs::disable("qpcr_start_calculation")
   
 }
 

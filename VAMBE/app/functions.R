@@ -525,7 +525,7 @@ plot_qpcr_qc_heatmap <- function(qPCRraw = NULL, qPCRnorm = NULL, title = "", di
 ###### ANALYSIS
 
 
-plot_qpcr_analysis_CQ <- function(data = tidy_qpcr, target = NULL, yval = "Cqnorm", SD = "SD", refgenes = NULL)
+plot_qpcr_analysis_CQ <- function(data = tidy_qpcr, target = NULL, samples = NULL, yval = "Cqnorm", SD = "SD", refgenes = NULL)
 {
   if(length(target) == 1)
   {
@@ -538,7 +538,7 @@ plot_qpcr_analysis_CQ <- function(data = tidy_qpcr, target = NULL, yval = "Cqnor
   }
   
   # get data
-  data <- dplyr::filter(data, Gene %in% target) %>% na.omit()
+  data <- dplyr::filter(data, Gene %in% target, Sample %in% samples) %>% na.omit()
   
   # set title and axes
   if(yval == "Cqraw")
@@ -758,6 +758,8 @@ calculate_cq <- function(df.pcr = NULL, cq_calc_method = "Cy0"){
   #length(colnames(df.pcr))
   length(calc)
   
+  print(cq_calc_method)
+  
   for(i in 1:length(calc))
   {
     x <- names(calc)[i]
@@ -773,13 +775,14 @@ calculate_cq <- function(df.pcr = NULL, cq_calc_method = "Cy0"){
       # fitting worked
       
       out$fitted <- fitted
-      efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = "Cy0", method="spline"))
-      if(class(efficiency) == "try-error")
+      efficiency = try(qpcR::efficiency(out$fitted, plot=FALSE, type = cq_calc_method, method="spline"))
+      if(class(efficiency) == "try-error" || length(efficiency$eff) > 1 || is.na(efficiency$eff))
       {
         out$efficiency <- NA
         out$cq <- NA
       } else {
         
+        # efficiency might be NA or negative, which means the fit is bad!
         out$efficiency <- efficiency
         # Fourth: get calculated Cq or calculate Cq for Cy0
         if(cq_calc_method == "Cy0")
@@ -862,8 +865,8 @@ qpcr_tidy_calc <- function(qPCRnormobject = NULL, qPCRrawobject = NULL, qPCRrawu
   
   tidy_qpcr$SD <- apply(tidy_qpcr,1, function(x){
     
-    df_sd <- dplyr::filter(tidy_qpcr, Gene == x["Gene"], Sample == x["Sample"]) %>% dplyr::select(Gene, Cqunfiltered)
-    df_sd$SD <- sd(df_sd$Cqunfiltered, na.rm = TRUE)
+    df_sd <- dplyr::filter(tidy_qpcr, Gene == x["Gene"], Sample == x["Sample"]) %>% dplyr::select(Gene, Cqraw)
+    df_sd$SD <- sd(df_sd$Cqraw, na.rm = TRUE)
     df_sd$Cqunfiltered <- NULL
     # bind to tmp
     #tidy_qpcr_temp <- dplyr::left_join(tidy_qpcr_temp,unique(df_sd),by = "Gene")

@@ -89,7 +89,7 @@ names(filtercompare) <- filtercolumn
 filtercompare["Treatment"] <- "%in%"
 #filtercompare["File"] <- "%in%"
 
-filtercriteria[["Treatment"]] <- c("DNAJB14")
+filtercriteria[["Treatment"]] <- c("RASAL3")
 #filtercriteria[["File"]] <- c("HCT116_regrowth.tsv","HEK_regrowth.tsv")
 
 # now we filter!
@@ -219,7 +219,7 @@ if(!is.null(plotline))
   
 }
 # add title, subtitle, axis labels
-g <- g + labs(title = main, x = xmain, y = ymain) 
+g <- g + labs(title = paste(main, paste( filtercriteria[["Treatment"]], collapse = ",") , sep=" "), x = xmain, y = ymain) 
 # add legend?
 g <- g + theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position=legend)
 
@@ -239,27 +239,11 @@ ggsave(filename = paste0(paste(filtercriteria[["Treatment"]], collapse = "-"), "
 ggplot(data=df_filtered, aes(x=File, y=Log2))+
   geom_boxplot() +
     geom_jitter(shape=16, position=position_jitter(0.2)) +
-  labs(title = "Calibrated Ratio Wnt stimulated", x = "Samples", y = "Calibrated Ratio to CTRL") +
+  labs(title = paste("Calibrated Ratio of", paste( filtercriteria[["Treatment"]], collapse = ",") ), x = "Samples", y = "Calibrated Ratio to CTRL") +
     ggplot2::theme_bw() +
     ggplot2::geom_hline(yintercept = 0) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
 
-
-ggplot(data=noWnt, aes(x=reorder(Treatment, Log2), y=Log2))+
-  geom_boxplot() +
-    geom_jitter(shape=16, position=position_jitter(0.2)) +
-  labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
-    ggplot2::theme_minimal() +
-    ggplot2::geom_hline(yintercept = 0) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
-
- p <- ggplot(data, aes(x=Treatment, y=Log2, fill=Treatment)) + 
-    geom_boxplot() +
-    geom_jitter(shape=16, position=position_jitter(0.2)) +
-    labs(title = "Calibrated Ratio with Wnt Stimulation", x = "Samples", y = "Log2 Calibrated Ratio to CTRL") +
-    ggplot2::theme_minimal() +
-    ggplot2::geom_hline(yintercept = 0) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
 
 ```
 

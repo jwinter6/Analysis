@@ -26,7 +26,7 @@ samplelist <- list("1" = "Sample1", "2" = "Sample2", "3" = "Sample3")
 
 # type of Cq calculation method
 ## must be one of: cpD2 (default), cpD1 or Cy0
-cq_calc_method = "Cy0"
+cq_calc_method = "cpD2"
 
 # was a robot used to pipet the plate?
 robot <- TRUE
@@ -602,8 +602,8 @@ df_samples$Control[df_samples$Control == calibrator] <- "Endogenous Control"
 
 
 
-View(df_samples)
-str(df_samples)
+#View(df_samples)
+#str(df_samples)
 # path <- system.file("exData", package = "HTqPCR")
 # head(read.delim(file.path(path, "files.txt")))
 # 
@@ -643,7 +643,7 @@ for(i in 1:length(n_samples$Files))
 #readr::write_tsv(x = output_cqdata, path = file.path(getwd(), n_samples[1]), col_names = FALSE)
 
 # read back in for htqpcr as qcprdataset
-qPCRraw <- HTqPCR::readCtData(files = n_samples$Files, path=getwd(), column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features)
+qPCRraw <- HTqPCR::readCtData(files = n_samples$Files, path=getwd(), column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5), n.features = n_features)
 # 
 
 ## FLAG and FILTER
@@ -704,6 +704,36 @@ featurePos(qPCRraw)
 #         geometric.mean --> Ct.max -> maximum ct value expected
 # INPUT: refgenes 
 refgenes <- c("PGK1")
+qPCRraw <- try(HTqPCR::filterCategory(qPCRraw))
+
+# check for NAs and replace them bei MEAN of rest replicates if possible
+df <- getCt(qPCRraw)
+genes <- attributes(df)$dimnames[[1]]
+df <- as.tibble(getCt(qPCRraw))
+df$targets <- genes
+means <- aggregate(x = df,by = list(df$targets),FUN = function(x) { mean(x, na.rm=TRUE)})
+# now we walk through tibble and check for NAs of same gene
+cols <- colnames(df)
+for(i in 1:(length(cols)-1) )
+  {
+   d <- dplyr::select_(df, cols[i], "targets" )
+   
+   df[cols[i]][1] <- apply(d, 1, function(x, colname = cols[i], target= "targets"){
+     
+     if(is.na(x[colname]))
+     {
+       replace <- means[means$Group.1 == x[target], colname]
+     } else {
+       replace <- x[colname]
+     }
+     return(as.numeric(replace))
+     
+   })
+   
+}
+df$targets <- NULL
+setCt(qPCRraw) <- as.matrix(df)
+
 qPCRnorm <- normalizeCtData(qPCRraw, norm = "deltaCt", Ct.max = maxCT, deltaCt.genes = refgenes)
 
 # After normalization, we laso put data into the tidy data frame

@@ -474,6 +474,8 @@ output$luc_qc_fluc_overview <- renderPlot({
   )
   
   data_use <- dplyr::filter(luc_file_data()$plot, Plate == input$luc_qc_input_plate)
+  #Log2 transform
+  data_use$FLUC <- log2(data_use$FLUC)
   # if no treatment is specified -> set to NA
   data_use[is.na(data_use$Treatment),c("Treatment","FLUC","RLUC","Divided","Log2")] <- NA
   
@@ -491,7 +493,7 @@ output$luc_qc_fluc_overview <- renderPlot({
     scale_x_continuous(breaks=seq(1, luc_file_xlsx()$plate_cols)) +
     ggplot2::theme_minimal() +
     #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
-    labs(title=paste("Plate Layout:", "FLUC", input$luc_qc_input_plate, sep=" ") )
+    labs(title=paste("Plate Layout:", "log2 FLUC", input$luc_qc_input_plate, sep=" ") )
   
   print(g)
   
@@ -505,6 +507,7 @@ output$luc_qc_rluc_overview <- renderPlot({
   )
   
   data_use <- dplyr::filter(luc_file_data()$plot, Plate == input$luc_qc_input_plate)
+  data_use$RLUC <- log2(data_use$RLUC)
   # if no treatment is specified -> set to NA
   data_use[is.na(data_use$Treatment),c("Treatment","FLUC","RLUC","Divided","Log2")] <- NA
   
@@ -522,7 +525,7 @@ output$luc_qc_rluc_overview <- renderPlot({
     scale_x_continuous(breaks=seq(1, luc_file_xlsx()$plate_cols)) +
     ggplot2::theme_minimal() +
     #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
-    labs(title=paste("Plate Layout:", "RLUC", input$luc_qc_input_plate, sep=" ") )
+    labs(title=paste("Plate Layout:", "log2 RLUC", input$luc_qc_input_plate, sep=" ") )
   
   print(g)
   
@@ -547,13 +550,13 @@ output$luc_qc_divided_overview <- renderPlot({
   g <- ggplot2::ggplot(data=platemap, aes(x=Column, y=Row)) +
     geom_point(data=expand.grid(seq(1, luc_file_xlsx()$plate_cols), seq(1, luc_file_xlsx()$plate_rows)), aes(x=Var1, y=Var2),
                color="grey90", fill="white", shape=21, size=6) +
-    geom_point(aes(color=Divided), size=6) +
+    geom_point(aes(color=Log2), size=6) +
     coord_fixed(ratio=((luc_file_xlsx()$plate_cols+1)/luc_file_xlsx()$plate_cols)/((luc_file_xlsx()$plate_rows+1)/luc_file_xlsx()$plate_rows), xlim=c(0.5, luc_file_xlsx()$plate_cols+1), ylim=c(0.5, luc_file_xlsx()$plate_rows+1)) +
     scale_y_reverse(breaks=seq(1, luc_file_xlsx()$plate_rows), labels=LETTERS[1:luc_file_xlsx()$plate_rows]) +
     scale_x_continuous(breaks=seq(1, luc_file_xlsx()$plate_cols)) +
     ggplot2::theme_minimal() +
     #scale_shape_manual(values=seq(from=0, to = length(unique(platemap$value)), by=1 ) ) +
-    labs(title=paste("Plate Layout:", "FLUC / RLUC", input$luc_qc_input_plate, sep=" ") )
+    labs(title=paste("Plate Layout:", "log2 FLUC / RLUC", input$luc_qc_input_plate, sep=" ") )
   
   print(g)
   

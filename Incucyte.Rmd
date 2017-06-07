@@ -1,8 +1,8 @@
 ---
 title: "Incucyte Data Analysis"
 output:
-  html_document: default
-  html_notebook: default
+  html_document:
+    fig.retina: 1
 ---
 
 # Incucyte Data
@@ -32,27 +32,57 @@ If STDErr is also present, this will be always the column next to it!
 ## Setup parameters
 
 ```{r setup}
+
+library(tidyverse)
+
 stderr_present <- FALSE
-filepath <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Microscopy/2017-03-03_24-well_sgRNATEST/"
-filename <- "2017-03-06_replicates.txt"
+filepath <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Microscopy/Analysis_Growth_Enrichedpools_TRIAL1-2"
+filename <- c("2017-05-17_HEKTCF-HCT116TCF_enrichedpools_TRIAL2_R2.txt")
 
 ```
 
-STDErr is presnet in the file? `r stderr_present`  
+STDErr is present in the file? `r stderr_present`  
+
 File is located in `r filepath` with the name `r filename`.
 
 ## Data Handling
 
 ```{r load}
+if(length(filename) >1 )
+{
+  for(i in 1:length(filename))
+  {
+    if(i==1)
+    {
+      data <- readr:: read_tsv(file = file.path(filepath,filename[i]),col_names = TRUE, skip = 7, locale = readr::locale(decimal_mark = ","))
+    } else {
+      data <- data %>% dplyr::bind_rows(
+        readr:: read_tsv(file = file.path(filepath,filename[i]),col_names = TRUE, skip = 7, locale = readr::locale(decimal_mark = ","))
+      )
+      
+    }
+    
+  }
+} else {
+  data <- readr:: read_tsv(file = file.path(filepath,filename),col_names = TRUE, skip = 7, locale = readr::locale(decimal_mark = ","))
+}
 
-data <- readr:: read_tsv(file = file.path(filepath,filename),col_names = TRUE, skip = 7, locale = readr::locale(decimal_mark = ","))
 
 # get correct colnames
 col_names <- colnames(data)
 ## get all after the ","
-col_names <- sub(pattern = "^.*,\\s+(.*)$", perl = TRUE, replacement = "\\1", x = col_names)
+#col_names <- sub(pattern = "^.*,\\s+(.*)$", perl = TRUE, replacement = "\\1", x = col_names)
+# get rid of file specific things
+col_names <- gsub(pattern = "2017-05-12_HEKTCF-HCT116TCF_enrichedpools_TRIAL2_R", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "2017-05-12_HEK-HCTTCF_enrichedTRIAL2", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "[:;,]", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "\\s/", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "^\\s", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "\\(", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "\\)", perl = TRUE, replacement = "", x = col_names)
+col_names <- gsub(pattern = "\\s", perl = TRUE, replacement = "_", x = col_names)
 
-colnames(data) <- col_names
+colnames(data) <- make.names(col_names, unique = TRUE)
 samples <- as.list(col_names[3:length(col_names)])
 names(samples) <- col_names[3:length(col_names)]
 
@@ -63,33 +93,291 @@ data.raw <- data
 
 ```{r datatable}
 
-DT::datatable(data,class="stripe hover")
+filename <- "DATA_exported"
+  opts <- list( dom = "Bflrtip",
+                lengthMenu = list(c(5, 15, 50, 100, -1), c('5', '15', '50', '100', 'All')), 
+                pageLength = 15, scrollX = FALSE)
+  opts[["order"]] <- NULL
+  opts[["buttons"]] <- list("copy","print", list("extend" = 'csv', "text"='csv', "filename" = filename, "title" = filename), list("extend" = 'excel', "text"='Excel', "filename" = filename, "title" = filename), list("extend" = 'pdf', "text"='pdf', "filename" = filename, "title" = filename))#buttons
+  
+  ext <- character(0)
+  ext <- c(ext, "Buttons")
+  ext <- c(ext, "Responsive")
 
-# Normalize Data with the FIRST value for each sample! -> column wise!
-for(i in 3: length(col_names))
-{
-  # divide by the first element of the column
-  data[[i]] <- data[[i]] / data[[i]][1]
-}
+DT::datatable(data, style = "default", class = "display",  options = opts, extensions = ext)
 
-DT::datatable(data,class="stripe hover")
+# write table
+readr::write_tsv(x = data,path = file.path(filepath,"incucyte_raw.tsv"), append = FALSE)
+
+# # to which data point shall it be normalized?
+# # input: get data$elapsed and select one of it
+# normselect = 2
+# normdata <- dplyr::filter(data,Elapsed == normselect)
+# 
+# # Normalize Data with the FIRST value for each sample! -> column wise!
+# for(i in 3: length(col_names))
+# {
+#   # divide by the first element of the column
+#   data[[i]] <- data[[i]] / normdata[[i]]
+# }
+# 
+# DT::datatable(data,class="stripe hover")
 
 ```
 
+# Fitting
+
+Since the individual samples have different starting confluency and subsequent reach the 100% confluence at different time points, we need to
+fit the curve to get the slope and curve parameters to compare the viability/cell doubling effects.
+
+```{r growthcurver, eval=FALSE, echo=FALSE}
+
+# days=data$Elapsed
+# Vec=data$RLUC
+# Gene=data$CFC1
+# Vec2=log(Vec)
+# Gene2=log(Gene)
+# 
+# plot(days,Vec2)
+# plot(days,Gene2)
+# 
+# fit_Vec=lm (Vec2 ~ days)
+# fit_gene=lm(Gene2 ~ days)
+# abline(fit_Vec)
+# abline(fit_gene)
+# 
+# Coef_Vec=fit_Vec$coef
+# Coef_gene=fit_gene$coef
+# 
+# doubling_time_Vec=log(2)/Coef_Vec
+# doublint_time_gene=log(2)/Coef_gene
+# 
+# 
+
+# Idea:
+# First, we cut all wells by a specific confluence as a starting point. This is done since lower confluence will result in delayed cell growth as cells require a certain density.
+# Second, we cut all samples by a specific confluence end point (95%) to show full confluency
+# Third, we re-calculate the hours for each sample starting from this time point
+# Fourth, we perform individual well fittings
+
+
+
+
+
+library(growthcurver)
+
+df_gc <- data.raw
+df_gc$`Date Time` <- NULL
+
+
+# Now, we'll use Growthcurver to summarize the growth curve data using the 
+# simple background correction method (minimum value correction). This is the 
+# default method, so we don't need to specify it in the command.
+# This returns an object of type "gcfit" that holds information about
+# the best parameters, the model fit, and additional metrics summarizing
+# the growth curve.
+gc_fit <- SummarizeGrowth(df_gc$Elapsed, df_gc$`: HEKTCF (1) 50K / well, RLUC`)
+
+# It is easy to get the most useful metrics from a gcfit object, just type:
+gc_fit
+
+# And it is easy to plot the raw data and the best fit logistic curve
+plot(gc_fit)
+
+# The gcfit object returned from SummarizeGrowth also contains further metrics 
+# summarizing the growth curve data.
+gc_fit$vals
+
+# look at the structure of the gc_fit object
+str(gc_fit)
+
+
+# To see all the available metrics 
+str(gc_fit$vals)
+
+
+# doubling time is tgen (multiplied by time mearsurement, which is 2 hours)
+gc_fit$vals$t_gen * 2
+
+
+```
+
+
+
+
+```{r sicegar}
+library(sicegar)
+
+
+#View(data)
+cols <- colnames(data) # starting AFTER Date Time and Elapsed will be the treatments
+# we will always select two columns:
+# elapse AND one treatment
+
+# data frame must contain two colums for sicegar, time and intensity
+# we will individually go through samples and select those columsn for analysis.
+
+
+
+for(i in 3:length(cols))
+{
+  hours <- "Elapsed"
+  colname <- cols[i]
+  testdf <- data %>% dplyr::select_(hours, i)
+
+colnames(testdf) <- c("time", "intensity")
+
+    
+# Normalize Data
+dataOutput = sicegar::normalizeData(testdf, dataInputName = "sample")
+dataInput=dataOutput
+# Apply dataCheck function to see if data is fine
+dataOutputVariable2 = dataCheck(dataInput)
+
+# Do the sigmoidal fit
+sigmoidalModel=fitFunction(dataInput=dataInput,
+                           model="sigmoidal",
+                           n_runs_min=20,
+                           n_runs_max=500,
+                           showDetails=FALSE)
+# 
+# (t(sigmoidalModel))
+
+
+# check if meaningfull
+intensityTheoretical=sicegar::sigmoidalFitFormula(testdf$time,
+                                                  maximum=sigmoidalModel$maximum_Estimate,
+                                                  slope=sigmoidalModel$slope_Estimate,
+                                                  midPoint=sigmoidalModel$midPoint_Estimate)
+comparisonData=cbind(testdf,intensityTheoretical)
+
+
+# 
+# estimated slop is e.g. 0.07905143
+slope <- sigmoidalModel$slope_Estimate
+sigmoidalModel$log_likelihood # the higher the better
+sigmoidalModel$residual_Sum_of_Squares # the lower the better
+# what does it mean?
+# we have measurements every two hours, so we can calculate the change in 24 hours by multiplying with 12
+# or we just take the slope as it is, which means 
+# so for the general calculation we need to assume the following:
+# contant time difference between measurement
+# input: time difference in hours between measurement
+input_timedifference <- 2
+
+# so we calculate the doubling time in hours
+growth24h <- slope * (24/input_timedifference) *100 # slope multiplied by number of measurements a day gives the total increase in 24 hours
+
+# alternatively we calculate the number of hours to double the amount of signal according to the slope
+# here we divide 100% (1) by the slope to retrieve the number of slope steps to retrieve 100%. since one measurement is 2h  and the slope is calculated using this time difference, we need to correct for it by multiplying with this to get the point were we reach 100%
+dbtime <- (1/slope) * input_timedifference
+  
+if(i==3)
+{
+  data_list <- list(list("DoublingTime" = dbtime,
+                         "24hgrowth" = growth24h,
+                         "tidy" = testdf,
+                         "fit" = sigmoidalModel,
+                         "datainput" = dataInput,
+                         "comparisondata" = comparisonData)
+                    )
+  names(data_list) <- cols[i]
+  
+  dbtime_tidy <- tibble("Sample" = cols[i],
+                        "DoublingTime" = dbtime,
+                        "24growth" = growth24h,
+                        "Elapsed" = dataInput$timeIntensityData$time,
+                        "Value" = dataInput$timeIntensityData$intensity
+                        )
+  
+} else {
+  names_old <- names(data_list)
+  data_list <- c(data_list, 
+                 list(list("DoublingTime" = dbtime,
+                         "24hgrowth" = growth24h,
+                         "tidy" = data,
+                         "fit" = sigmoidalModel,
+                         "datainput" = dataInput,
+                         "comparisondata" = comparisonData)
+                    )
+                )
+  names(data_list) <- c(names_old, cols[i])
+  
+  dbtime_tidy_tmp <- tibble("Sample" = cols[i],
+                        "DoublingTime" = dbtime,
+                        "24growth" = growth24h,
+                        "Elapsed" = dataInput$timeIntensityData$time,
+                        "Value" = dataInput$timeIntensityData$intensity
+                        )
+  
+  dbtime_tidy <- dbtime_tidy %>% dplyr::bind_rows(dbtime_tidy_tmp)
+  
+}
+
+}
+
+# write tidy data
+readr::write_tsv(x = dbtime_tidy,path = file.path(filepath,"Analysis_tidy.tsv"), append = TRUE,col_names = TRUE)
+
+```
 
 # Plots
 
 ## Overall Plot
 
-```{r plot-all-rawdata}
+```{r plot-all-rawdata, results='asis'}
+
+# names can be from names(data_list)
+for(i in 1:length(data_list))
+{
+  
+  cat("### ", names(data_list)[i], " \n")
+  
+  cat("#### ", "Normalized Curve", " \n")
+  
+  # print fitting data
+  g <- ggplot2::ggplot(data_list[[i]]$comparisondata)+
+  ggplot2::geom_point(aes(x=time, y=intensity))+
+  ggplot2::geom_line(aes(x=time,y=intensityTheoretical))+
+  ggplot2::expand_limits(x = 0, y = 0) + 
+  ggplot2::theme_bw() + 
+  ggplot2::labs(title = names(data_list)[i], sep=" ") 
+  
+  print(g)
+  
+  cat("\n ","#### ", "Fitted Curve", " \n")
+  
+  # Sigmoidal Fit with parameter related lines, ggplot2
+g=printInfectionCurves(data_list[[i]]$datainput,
+                           sigmoidalFitVector=data_list[[i]]$fit,
+                           showParameterRelatedLines=TRUE) +
+    ggplot2::theme_bw() + 
+    ggplot2::labs(title = names(data_list)[i], sep=" ") 
+
+print(g)
+  
+}
+
+
+
+
+
+
+
+
+# print doubling times
+
+
+cat("## ", "Growth Curves", " \n")
+
 library(highcharter)
 
 hc <- highcharter::highchart() %>%
   highcharter::hc_chart(type="spline",zoomType="xy")%>%
   highcharter::hc_title(text = "Cell Confluence") %>%
-  highcharter::hc_subtitle(text = "for all sampled with median replicates") %>%
+  highcharter::hc_subtitle(text = "") %>%
   highcharter::hc_xAxis(title = list(text = "Sample")) %>%
-  highcharter::hc_yAxis(title = list(text = "Confluence in %")) %>%
+  highcharter::hc_yAxis(title = list(text = "Normalized Confluence in %")) %>%
   highcharter::hc_legend(enabled = TRUE) %>%
   highcharter::hc_exporting(enabled = TRUE,
                  printMaxWidth = 2000,
@@ -98,11 +386,12 @@ hc <- highcharter::highchart() %>%
                  formAttributes = list(target = "_blank")
                  )
 
-  for(i in 1:length(samples))
+  for(i in 1:length(unique(names(data_list))))
   {
-    plotdata <- data.raw[,c("Elapsed",names(samples)[i])]
+    sample <- unique(names(data_list))[i]
+    plotdata <- dbtime_tidy %>% filter(Sample %in% sample) %>% dplyr::select(Elapsed, Value)
     colnames(plotdata) <- c("x", "y")
-    hc <- highcharter::hc_add_series(hc, data = plotdata, name = names(samples)[i])
+    hc <- highcharter::hc_add_series(hc, data = plotdata, name = sample)
   }
 
   hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE, borderWidth = 0, delayForDisplay = 1500) %>%
@@ -111,9 +400,42 @@ hc <- highcharter::highchart() %>%
 hc
 
 
+cat("## ", "Doubling Times", " \n")
+
+for(i in 1:length(data_list))
+{
+  if(i==1)
+  {
+    dbtimedata <- tibble(
+      "Sample" = names(data_list)[i],
+      "Time" = data_list[[i]]$DoublingTime
+    ) 
+  } else
+    {
+       dbtimedata <- dbtimedata %>% dplyr::bind_rows( tibble(
+      "Sample" = names(data_list)[i],
+      "Time" = data_list[[i]]$DoublingTime) )
+    }
+  
+}
+
+# remove empty
+dbtimedata <- dbtimedata %>% dplyr::filter(Sample != "Empty")
+# make plot
+
+ggplot(data=dbtimedata, aes(x=Sample, y=Time))+
+  geom_boxplot() +
+    geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = paste("Calculated Doubling Time" ), x = "Samples", y = "Doubling Time [h]") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+
+
+
 ```
 
-```{r plot-all}
+```{r plot-all, eval=FALSE}
 library(highcharter)
 
 hc <- highcharter::highchart() %>%
@@ -121,7 +443,7 @@ hc <- highcharter::highchart() %>%
   highcharter::hc_title(text = "Cell Confluence") %>%
   highcharter::hc_subtitle(text = "for all sampled with median replicates") %>%
   highcharter::hc_xAxis(title = list(text = "Sample")) %>%
-  highcharter::hc_yAxis(title = list(text = "Normalized Confluence in Foldchange from Start")) %>%
+  highcharter::hc_yAxis(title = list(text = paste("Normalized Confluence in Foldchange to", normselect, "hours from start", sep= " ") )) %>%
   highcharter::hc_legend(enabled = TRUE) %>%
   highcharter::hc_exporting(enabled = TRUE,
                  printMaxWidth = 2000,
@@ -145,8 +467,22 @@ hc
 
 ```
 
+## All Data as ggplot
+
+```{r ggplot-all, eval=FALSE, echo=FALSE}
 
 
+```
+
+
+```{r ggplot-normalize, eval=FALSE, echo=FALSE}
+
+
+```
+
+
+
+# Calculate rates of change
 
 
 

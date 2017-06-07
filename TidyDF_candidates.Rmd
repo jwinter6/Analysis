@@ -1,0 +1,215 @@
+---
+title: "CandidateOverview"
+author: "Jan Winter"
+date: "24 Mai 2017"
+output:
+  html_document:
+    fig_width: 10
+    fig.retina: 1
+---
+
+# Load Data
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+####### Luciferase Data
+
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/"
+# load all files in folder
+files <- list.files(path = path ,pattern="*.tsv")
+
+for(i in 1:length(files))
+{
+  # do bind_rows to add those, they all have the same column structure
+ if(i == 1){
+   # initialise
+   
+   df_luciferase <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   # add file name
+   df_luciferase$File <- files[i]
+ } else {
+   
+   #data_tibble <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   
+   # add file name
+    df_luciferase2 <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+    df_luciferase2$File <- files[i]
+    df_luciferase <- df_luciferase %>% dplyr::bind_rows(df_luciferase2)
+    
+    df_luciferase2 <- NULL
+ } 
+  
+}
+
+# remove X1
+df_luciferase$X1 <- NULL
+
+
+
+####### qPCR Data
+
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/Analysis_All/"
+# load all files in folder
+files <- list.files(path = path ,pattern="*.tsv")
+
+for(i in 1:length(files))
+{
+  # do bind_rows to add those, they all have the same column structure
+ if(i == 1){
+   # initialise
+   
+   df_qpcr <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   # add file name
+   df_qpcr$File <- files[i]
+ } else {
+   
+   #data_tibble <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   
+   # add file name
+    df_qpcr2 <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+    df_qpcr2$File <- files[i]
+    df_qpcr <- df_qpcr %>% dplyr::bind_rows(df_qpcr2)
+    
+    df_qpcr2 <- NULL
+ } 
+  
+}
+
+# remove X1
+df_qpcr$X1 <- NULL
+
+
+
+####### Incucyte Data
+
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Microscopy/Analysis_Growth_Enrichedpools_TRIAL1-2/"
+# load all files in folder
+files <- list.files(path = path ,pattern="*.tsv")
+
+for(i in 1:length(files))
+{
+  # do bind_rows to add those, they all have the same column structure
+ if(i == 1){
+   # initialise
+   
+   df_incucyte <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+   # add file name
+   df_incucyte$File <- files[i]
+ } else {
+   
+   #data_tibble <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE) %>% dplyr::bind_rows(data_tibble)
+   
+   # add file name
+    df_incucyte2 <- readr::read_tsv(file = file.path(path, files[i]),col_names = TRUE,progress = TRUE)
+    df_incucyte2$File <- files[i]
+    df_incucyte <- df_incucyte %>% dplyr::bind_rows(df_incucyte2)
+    
+    df_incucyte2 <- NULL
+ } 
+  
+}
+
+# remove X1
+df_incucyte$X1 <- NULL
+
+df_incucyte <- df_incucyte %>% dplyr::select(c(Sample,File,DoublingTime,`24growth`,Value)) %>% dplyr::filter(!is.na(Sample))
+
+
+```
+
+
+# Input Data
+
+
+```{r datatable, results='asis}
+
+library(DT)
+
+DT::datatable(df_luciferase)
+DT::datatable(df_qpcr)
+DT::datatable(df_incucyte)
+
+```
+
+
+
+# Plots
+
+
+```{r candidate}
+
+# select candidate(s)
+# Luciferase plots will show:
+# no Wnt (calibrated to px459)
+# Wnt (calibrated to px459_Wnt)
+#data <- dplyr::filter(df_luciferase, grepl(candidate, Treatment))
+
+# "APC","B4GALT6", "B4GALT7","CFC1","DNAJB14","FARP2","RIC1","FRMD5","CEP55","KLHL22","KIF21A","PAQR7"
+ candidate <- c("TMEM191B")
+
+
+
+
+# Luciferase
+
+
+data <- dplyr::filter(df_luciferase, Treatment %in% candidate)
+ 
+ p <- ggplot(data, aes(x=Treatment, y=Log2, fill=File)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Log2 Calibrated Ratio", x = "Samples", y = "Log2 Calibrated Ratio to CTRL") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  
+ p
+
+ ggsave(filename = paste(candidate,"_Luciferase.png"),device = "png",dpi = 300,width = 10)
+ 
+ 
+ 
+# qPCR
+# all Cailbrated to RLUC
+ 
+ data <- dplyr::filter(df_qpcr, Sample %in% candidate) %>% dplyr::filter(Calibrator=="RLUC")
+ data$FC <- log2(data$FC)
+ 
+  p <- ggplot(data, aes(x=Gene, y=FC)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Relative mRNA expression", x = "Target Gene", y = "Log2 normalized and calibrated expression") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  
+ p
+
+ ggsave(filename = paste(candidate,"_qPCR.png"),device = "png",dpi = 300,width = 10)
+
+ 
+ # Incucyte Viability
+ 
+data <- dplyr::filter(df_incucyte, grepl(candidate,Sample))
+ 
+  p <- ggplot(data, aes(x=Sample, y=DoublingTime)) + 
+    geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+    labs(title = "Calculated Doubling Time", x = "Candidate", y = "Normalized DoublingTime [h]") +
+    ggplot2::theme_minimal() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+  
+ p
+
+ ggsave(filename = paste(candidate,"_DoublingTime.png"),device = "png",dpi = 300,width = 10)
+
+ 
+```
+ 
+ 
+ 
+ 
+ 
+ 

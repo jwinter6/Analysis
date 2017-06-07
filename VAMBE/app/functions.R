@@ -758,8 +758,6 @@ calculate_cq <- function(df.pcr = NULL, cq_calc_method = "Cy0"){
   #length(colnames(df.pcr))
   length(calc)
   
-  print(cq_calc_method)
-  
   for(i in 1:length(calc))
   {
     x <- names(calc)[i]

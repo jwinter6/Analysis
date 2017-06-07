@@ -1,7 +1,7 @@
 ---
-title: "TidyDF_Visualization"
+title: "TidyDF_Visualization_qPCR"
 author: "Jan Winter"
-date: "24 April 2017"
+date: "22 Mai 2017"
 output:
   html_document:
     fig_width: 10
@@ -14,8 +14,8 @@ output:
 ```{r setup, include=FALSE}
 library(tidyverse)
 # load CSV files
-path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/Luciferase/Assays/2017-05-19_HEKTCF_RegrowthWnt/all"
-file <- "Analysis_calibrated_to px459_1_Wnt _ PAQR7_Wnt-DNAJB14_Wnt-CFC1_Wnt-B4GALT6_Wnt-px459_1_Wnt-Topflash_1_Wnt-APC_1_Wnt-KIF21A_Wnt-KRT36_Wnt-TMEM191B_Wnt-FARP2_Wnt-RIC1_Wnt-KLHL22_Wnt-B4GALT7_Wnt-CEP55_Wnt-LIMS1_Wnt-FRMD5_Wnt.csv"
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/Analysis_All/"
+
 
 files <- list.files(path = path ,pattern="*.csv")
 
@@ -41,8 +41,6 @@ for(i in 1:length(files))
 data_tibble$X1 <- NULL
 
 
-
-
 ```
 
 Data loaded from `r path` stored in `r length(files)` CSV files.  
@@ -58,94 +56,125 @@ DT::datatable(data_tibble)
 ```
 
 
-# Make plots
-
-First we replace numbers to only get back gene symbols.  
-Then we select the genes we want to investigate and plot them without and with 50ng/mL Wnt stimulation.  
-
-
-```{r makeplots}
-# remove any _3 etc from gene names
-
-data_tibble$Treatment <- sub(pattern = "_\\d{1,2}", replacement = "",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "_p\\d{1,2}", replacement = "",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^TOP$", replacement = "Topflash",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^TOP_", replacement = "Topflash_",x = data_tibble$Treatment)
-
-data_tibble$Treatment <- sub(pattern = "^SPRY_", replacement = "SPRY2_",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^B1GALT1", replacement = "B4GALT1",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^NPBWr", replacement = "NPBWR",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "^Kremen1", replacement = "KREMEN1",x = data_tibble$Treatment)
-
-
-data_tibble$Treatment <- sub(pattern = "TOPFLASH", replacement = "Topflash",x = data_tibble$Treatment)
-data_tibble$Treatment <- sub(pattern = "Wnt3", replacement = "Wnt",x = data_tibble$Treatment)
-
-```
-
-
-# Remove LOW values
-
-Then we remove all measurements with LOW RLUC levels as we expect something went wrong for thos
-
-```{r removelowrluc}
-RLUCthresh <- 50
-
-# Eliminate all entries with LOW RLUC values
-data_tibble <- data_tibble %>% dplyr::filter(RLUC.mean > RLUCthresh)
-
-
-# check for plates where px459 calibrated to itself is > 1.2 (should not be possible, plate may be bad)
-Fileremove <- data_tibble %>% filter(Treatment == "px459", Divided > 1.5) %>% dplyr::select(File) %>% .$File
-data_tibble <- data_tibble %>% filter(!File %in% Fileremove)
-
-Fileremove <- data_tibble %>% filter(Treatment == "px459_Wnt", Divided > 1.5, Divided < 0.6) %>% dplyr::select(File) %>% .$File
-data_tibble <- data_tibble %>% filter(!File %in% Fileremove)
-
-
-```
-
-# Safe tidy data in CSV
+# Safe tidy data in TSV
 
 ```{r savetidy}
 
-write_tsv(x = data_tibble, path = paste(file,".tsv", sep=""),append = FALSE,col_names = TRUE)
+write_tsv(x = data_tibble, path = file.path(path, paste("All_Tidy",".tsv", sep="") ),append = FALSE,col_names = TRUE)
 ```
 
-# make Wnt treatment separate and plot a ranked boxplot
+# Select Data
 
-```{r heatmap}
-data_heat <- data_tibble
-
-# make additional column with Wnt 1 or 0
-data_heat <- data_heat %>% dplyr::mutate(Wnt = grepl(pattern = ".*Wnt.*",x = Treatment))
+We always make sure selecting the ones that have seen the same calibrator -> calibrator column  
+Moreover we need to make sure the filename contains HCT for HCT data or not HCT for not HCT data.  
 
 
-# Try 1: Wnt vs no Wnt
-# make two columns: Log2 without and Log2 with Wnt treatment
-#df <-  tibble( "Gene" = unique(sub(pattern="_Wnt", x = data_heat$Treatment, replacement = "") ))
+```{r plot}
+
+# select data with calibrator
+data <- data_tibble %>% filter(Calibrator == "RLUC") %>% filter(!grepl("HCT", File)) %>% filter(!grepl("qPCR_data_calibrated_tidy.csv", File))
+
+# log2 transform data FC
+data$FC <- log2(data$FC)
+
+# Samples available
+unique(data$Sample)
+
+data <- data %>% filter(Sample %in% c("APC","CK1A","FARP2","KLHL22","DNAJB14","KIF21A","KRT36","PAQR7"))
+
+# first we plot:
+# BCAT, APC, CK1A, CFC1, KIF21A, FARP2, KRT36, DNAJB14, TMEM191B, KLHL22, PAQR7, B4GALT6 and B4GAlt7 (all!)
+
+# Heatmap
+
+library(gplots)
+
+x  <- as.matrix(data[c("FC","Sample","Gene")])
+
+data(mtcars)
+x  <- as.matrix(mtcars)
+rc <- rainbow(nrow(x), start=0, end=.3)
+cc <- rainbow(ncol(x), start=0, end=.3)
+
+heatmap.2(x)
+
+library(pheatmap)
+pheatmap::pheatmap(t(data[c("FC","Sample")]), 
+                   cluster_row = T,
+                   cluster_cols = F,
+                   #annotation_col = annotation_col,
+                   #annotation_row = annotation_row,
+                   color = col.pal, 
+                   fontsize = 6.5,
+                   fontsize_row=6, 
+                   fontsize_col = 6,
+                   gaps_col=50)
+
+# if we want we can restrict it to certain genes!
+data <- data %>% dplyr::filter(Gene %in% c("GAPDH","PGK1","IPO8","PPIA"))
 
 
-Wnt <- data_heat %>% dplyr::filter(Wnt == TRUE) %>% dplyr::select(Treatment,Log2)
-noWnt <- data_heat %>% dplyr::filter( Wnt == FALSE) %>% dplyr::select(Treatment,Log2)
-
-
-ggplot(data=Wnt, aes(x=reorder(Treatment, Log2), y=Log2))+
+# plot all samples against all selected genes
+ggplot(data=data, aes(x=reorder(Gene, FC), y=FC))+
   geom_boxplot() +
     geom_jitter(shape=16, position=position_jitter(0.2)) +
-  labs(title = "Calibrated Ratio Wnt stimulated", x = "Samples", y = "Calibrated Ratio to CTRL") +
+  labs(title = "Relative, calibrated mRNA Expression", x = "Target Genes", y = "Log2 Relative Expression Calibrated to RLUC") +
     ggplot2::theme_bw() +
     ggplot2::geom_hline(yintercept = 0) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
 
+ggsave(filename = "qPCR_plot1.png",device = "png",dpi = 300,width = 10)
 
-ggplot(data=noWnt, aes(x=reorder(Treatment, Log2), y=Log2))+
-  geom_boxplot() +
-    geom_jitter(shape=16, position=position_jitter(0.2)) +
-  labs(title = "Calibrated Ratio", x = "Samples", y = "Calibrated Ratio to CTRL") +
-    ggplot2::theme_minimal() +
+# Plot data grouped by sample!
+
+ggplot(data=data, aes(x=reorder(Gene, FC), y=FC))+
+  geom_bar(aes(fill = Sample),stat = "identity", position = "dodge") +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Relative, calibrated mRNA Expression", x = "Target Genes", y = "Log2 Relative Expression Calibrated to RLUC") +
+    ggplot2::theme_bw() +
     ggplot2::geom_hline(yintercept = 0) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+
+ggsave(filename = "qPCR_plot2.png",device = "png",dpi = 300,width = 10)
+
+
+ggplot(data=data, aes(x=Gene, y=FC))+
+  geom_bar(aes(fill = Sample),stat = "identity", position = "dodge") +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Relative, calibrated mRNA Expression", x = "Target Genes", y = "Log2 Relative Expression Calibrated to RLUC") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+
+ggsave(filename = "qPCR_plot3.png",device = "png",dpi = 300,width = 10)
+
+
+
+# only gene in which APC/CK1A show difference
+
+data <- data %>% dplyr::filter(Gene %in% c("ADAM10","AXIN2","DKK1","MYC","NOTCH2","EDN","ARMCX1","BIRC5","DKK4"))
+
+ggplot(data=data, aes(x=Gene, y=FC))+
+  geom_bar(aes(fill = Sample),stat = "identity", position = "dodge") +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Relative, calibrated mRNA Expression", x = "Target Genes", y = "Log2 Relative Expression Calibrated to RLUC") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+
+ggsave(filename = "qPCR_HEK.png",device = "png",dpi = 300,width = 10)
+
+
+ggplot(data=data, aes(x=reorder(Gene, FC), y=FC))+
+  geom_bar(aes(fill = Sample),stat = "identity", position = "dodge") +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = "Relative, calibrated mRNA Expression", x = "Target Genes", y = "Log2 Relative Expression Calibrated to RLUC") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
+
+ggsave(filename = "qPCR_HEK_ordered.png",device = "png",dpi = 300,width = 10)
+
 
 # 
 # data2<- data_heat %>% dplyr::select(Log2)
@@ -250,7 +279,7 @@ data <- dplyr::filter(data_tibble, Treatment %in% genes_wnt)
   
  p
  
- ggsave(filename = "Luciferase_HEK_WntRegrowth.png",device = "png",dpi = 300, width=10)
+ 
  
 ```
 

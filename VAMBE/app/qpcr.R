@@ -353,7 +353,9 @@ observe(qpcr_file_xlsx())
     shiny::need(input$qpcr_input_control, "Please select a control")
   )
   
-  
+   # Disble button
+   shinyjs::disable("qpcr_start_calculation")
+   shinyjs::enable("qpcr_reset_calculation")
   
   # if(qpcr_file_data()$success)
   # {
@@ -389,7 +391,7 @@ observe(qpcr_file_xlsx())
      
      wells <- as.list(unique(file.read$SamplePos))
      names(wells) <- unique(file.read$SamplePos)
-     print("lapply wells")
+     
      # make df.data with all data information and put this to df.pcr
      df.data <- lapply(wells, function(x){
        # get subset
@@ -416,9 +418,6 @@ observe(qpcr_file_xlsx())
      }
      #t <- dplyr::filter(file.read, SamplePos == "A1" & Prog == 3)  %>% dplyr::select( 7, 8)
      #df.melting <<- dplyr::left_join(df.melting, t, by = "Temp")
-     
-     print("lapply wells 2 for df.melting")
-     
      
      
       df.tmp <- lapply(wells, function(x){
@@ -460,33 +459,24 @@ observe(qpcr_file_xlsx())
          df.binding <- NULL
        }
      }
-   
-   
-    # Disble button
-    shinyjs::disable("qpcr_start_calculation")
-    shinyjs::enable("qpcr_reset_calculation")
-    
     
     # Calculate CQ
     #cq <- calculate_cq(df.pcr = qpcr_file_data()$pcr, cq_calc_method = input$qpcr_cq_method)
     cq <- calculate_cq(df.pcr, cq_calc_method = input$qpcr_cq_method)
 
-    # write calc list wiht all cq values to a tibble for htqpcr
+    # write calc list with all cq values to a tibble for htqpcr
     cq1 <- lapply(cq,function(x){
       return(x[["cq"]])
     })
     cq_df <- as.data.frame(t(as.data.frame(cq1)))
     cq_df$V1 <- as.numeric(cq_df$V1)
     
-    print("1")
     
     # FLAG Cq falues as NA for weird values
     # Input: maxCT and minCT for maximum and minum threshold. Everything above/below is set to NA and will be marked as FLAGGED
     
     cq_df$V1[cq_df$V1 >= as.numeric(input$maxCT)] <- NA
     cq_df$V1[cq_df$V1 <= as.numeric(input$minCT)] <- NA
-    
-    print("2")
     
     # Flag
     cq_df$Flag[is.na(cq_df$V1)] <- "undetermined"
@@ -496,7 +486,6 @@ observe(qpcr_file_xlsx())
     cq_df <- tibble::as_tibble(cq_df)
     colnames(cq_df) <- c("Cq", "Flag", "Position")
     
-    print("3")
     # make another df_samples
     df_samples <- dplyr::left_join(x=qpcr_file_xlsx()$df_samples, y=cq_df, by="Position")
     
@@ -506,9 +495,14 @@ observe(qpcr_file_xlsx())
     df_samples$Control[df_samples$Control %in% input$qpcr_input_negcontrol] <- "Negative Control"
     df_samples$Control[!(df_samples$Control %in% c("Endogenous Control", "Positive Control", "Negative Control") )] <- "Target"
     
-    print("4")
     # raw Cq data output for htqpcr
     output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control", "Flag")]
+    
+    # check for ignored wells
+    if(input$qpcr_input_removewells != "" && !is.null(input$qpcr_input_removewells))
+    {
+      output_cqdata[output_cqdata$Position %in% input$qpcr_input_removewells,"Cq"] <- NA 
+    }
     
     n_samples <- unique(output_cqdata$Sample)
     
@@ -538,7 +532,7 @@ observe(qpcr_file_xlsx())
     
     # config$userDir
     # read back in for htqpcr as qcprdataset
-    qPCRraw <- try(HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5, "flag" = 6), n.features = n_features))
+    qPCRraw <- try(HTqPCR::readCtData(files = n_samples$Files, path=config$userDir, column.info = list("position" = 1,"feature" = 2,"Ct" = 4, "type"=5), n.features = n_features))
     # 
     
     if(class(qPCRraw) == "try-error")
@@ -564,6 +558,54 @@ observe(qpcr_file_xlsx())
     #                                   }
     #                                 })
     # fData(qPCRraw) <- df_feature
+    
+    print(HTqPCR::getCt(qPCRraw))
+    # check for NAs and replace them bei MEAN of rest replicates if possible
+    df <- HTqPCR::getCt(qPCRraw)
+    genes <- attributes(df)$dimnames[[1]]
+    df <- as.tibble(HTqPCR::getCt(qPCRraw))
+    # make all with 40 back to NA
+    df_cols <- colnames(df)
+    for(i in 1:length(df_cols))
+    {
+      df[df[,i] >= 40,i] <- NA
+    }
+    # set gene names
+    df$targets <- genes
+    
+    
+    means <- aggregate(x = df,by = list(df$targets),FUN = function(x) { mean(x, na.rm=TRUE)})
+    print(means)
+    # now we walk through tibble and check for NAs of same gene
+    cols <- colnames(df)
+    for(i in 1:(length(cols)-1) )
+    {
+      d <- dplyr::select_(df, cols[i], "targets" )
+      
+      df[cols[i]][1] <- apply(d, 1, function(x, colname = cols[i], target= "targets"){
+        
+        if(is.na(x[colname]))
+        {
+          replace <- means[means$Group.1 == x[target], colname]
+        } else {
+          replace <- x[colname]
+        }
+        return(as.numeric(replace))
+        
+      })
+      
+      # if it is infinite, set to 40, will be NA later
+      df[cols[i]][[1]][is.infinite(df[cols[i]][[1]])] <- 40
+      
+    }
+    
+    df$targets <- NULL
+    print(df)
+    HTqPCR::setCt(qPCRraw) <- as.matrix(df)
+    
+    print(HTqPCR::getCt(qPCRraw))
+    print(HTqPCR::featureCategory(qPCRraw))
+    
     ## FLAG and FILTER
     qPCRraw <- try(HTqPCR::setCategory(qPCRraw, Ct.max = as.numeric(input$maxCT), Ct.min = as.numeric(input$minCT), groups=NULL, replicates = FALSE, flag = TRUE, flag.out = "Failed", verbose = TRUE))
     
@@ -576,15 +618,21 @@ observe(qpcr_file_xlsx())
     df_ct_cols <- colnames(df_ct)
     for(i in 1:length(df_ct_cols))
     {
-      df_ct[df_ct[,i] >=40,i] <- NA
+      df_ct[df_ct[,i] >= 40,i] <- NA
     }
-    #setCt(qPCRraw) <- df_ct
+    
+    
+    # get unfilter/unmodifierd stuff
     qPCRraw_unfiltered <- qPCRraw
+    
+
+    # now lets filter for qPCRnorm
     qPCRraw <- try(HTqPCR::filterCategory(qPCRraw))
     if(class(qPCRraw) == "try-error")
     {
       return(NA)
     }
+    
     # Normalize
     qPCRnorm <- try(HTqPCR::normalizeCtData(qPCRraw, norm = input$qpcr_normalize_method, Ct.max = as.numeric(input$maxCT), deltaCt.genes = input$qpcr_input_refgenes))
     if(class(qPCRnorm) == "try-error")
@@ -1255,7 +1303,16 @@ output$qpcr_analysis_calibrated_table <- renderDataTable({
 ##### INPUTS
 ################################
 
-
+output$qpcr_removewells <- renderUI({
+  shiny::validate(
+    shiny::need(qpcr_file_xlsx, "Please upload the XLSX overview file")
+  )
+  
+  genes <- unique(qpcr_file_xlsx()$df_samples$Position)
+  
+  return(shiny::selectizeInput(inputId = "qpcr_input_removewells", label = "Select the wells which you would like to ignore" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  
+})
 
 output$qpcr_refgenes <- renderUI({
   shiny::validate(
@@ -1263,8 +1320,7 @@ output$qpcr_refgenes <- renderUI({
   )
   
   genes <- unique(qpcr_file_xlsx()$df_samples$Type)
-  
-  
+
   return(shiny::selectizeInput(inputId = "qpcr_input_refgenes", label = "Select the Reference Genes for deltaCT normalization" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
   
 })

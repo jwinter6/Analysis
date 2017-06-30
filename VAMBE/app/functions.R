@@ -31,7 +31,7 @@ plot_luc_analysis_plot_rawdata_FLUC_plate <- function(data = luc_file_data()$plo
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "log2 FLUC", x = "Samples", y = "log2 FLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
   return(p)
 }
 
@@ -56,7 +56,7 @@ plot_luc_analysis_plot_rawdata_RLUC_plate <- function(data = luc_file_data()$plo
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
     labs(title = "log2 RLUC", x = "Samples", y = "log2 RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
   return(p)
 }
 
@@ -73,12 +73,12 @@ plot_luc_analysis_plot_rawdata_RATIO <- function(data = luc_file_data()$plot)
 
 plot_luc_analysis_plot_rawdata_RATIO_plate <- function(data = luc_file_data()$plot)
 {
-  p <- ggplot(data, aes(x=Plate, y=Divided, fill=Treatment)) + 
+  p <- ggplot(data, aes(x=Plate, y=Log2, fill=Treatment)) + 
     geom_boxplot() +
     #geom_jitter(shape=16, position=position_jitter(0.2)) +
-    labs(title = "FLUC normalized by RLUC", x = "Samples", y = "Ratio FLUC/RLUC") +
+    labs(title = "log2 FLUC normalized by RLUC", x = "Samples", y = "log2 Ratio FLUC/RLUC") +
     ggplot2::theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom")
   return(p)
 }
 

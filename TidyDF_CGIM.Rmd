@@ -516,6 +516,15 @@ clpmut$`Sample name` <- sub(pattern = "-|_",replacement = "",x = clpmut$`Sample 
 
 #data <- clpmut %>% dplyr::filter(grepl("large_intestine", `Primary site`) & grepl("colon", `Site subtype 1`) &  `HGNC ID` %in% c("11998","6407","2514","583"))
 #data <- clpmut %>% dplyr::filter(grepl("large_intestine", `Primary site`) &  `HGNC ID` %in% c("11998","6407","2514","583"))
+
+# Gene IDs:
+# 11998 ->
+# 6407 -> 
+# 2514 ->
+# 583 ->
+
+
+
 data <- clpmut %>% dplyr::filter(`Sample name` %in% c("HCT116","SW48","DLD1","RKO","HT29","HCT115","NCIH1299") &  `HGNC ID` %in% c("11998","6407","2514","583"))
 
 data
@@ -531,6 +540,42 @@ ggplot(data=data, aes(`Sample name`))+
   facet_grid(`Gene name` ~ .)
 
 ggsave(filename = "Colon_cells_mutations1.png", device = "png",dpi = 300,width = 10, height = 10)
+
+
+
+# get with more cell lines
+cells <- c("HCT116","SW48","DLD1","RKO","HT29","HCT115","NCIH1299","OUMS23","HCT8","MDST8","SNUC5","COLO320","CL11","SNU1040","HS698T","HS675T","SW620","SNUC1","LS1034","CL14")
+data <- clpmut %>% dplyr::filter(`Sample name` %in% cells &  `HGNC ID` %in% c("11998","6407","2514","583"))
+
+
+ggplot(data=data, aes(`Sample name`))+
+  geom_bar(aes(`Sample name`,fill=`Gene name`)) +
+    #geom_jitter(shape=16, position=position_jitter(0.2), aes(colour=source)) +
+  labs(title = "Mutations in Colon Cell Lines", x = "Cell Lines", y = "Number of Mutations") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom") +
+  facet_grid(`Gene name` ~ .)
+
+ggsave(filename = "Colon_cells_mutations2.png", device = "png",dpi = 300,width = 10, height = 10)
+
+
+
+# A375 Data
+data <- clpmut %>% dplyr::filter(`Sample name` %in% c("375") &  `HGNC ID` %in% c("11998","6407","2514","583"))
+
+
+ggplot(data=data, aes(`Sample name`))+
+  geom_bar(aes(`Sample name`,fill=`Gene name`)) +
+    #geom_jitter(shape=16, position=position_jitter(0.2), aes(colour=source)) +
+  labs(title = "Mutations in Colon Cell Lines", x = "Cell Lines", y = "Number of Mutations") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="bottom") +
+  facet_grid(`Gene name` ~ .)
+
+ggsave(filename = "Colon_cells_mutations2.png", device = "png",dpi = 300,width = 10, height = 10)
+
 
 ```
 

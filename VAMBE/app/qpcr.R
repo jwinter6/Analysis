@@ -80,44 +80,88 @@ qpcr_file_xlsx <- reactive({ #input$submit_qpcr_xlsx,
     if(class(xlsx_primer) == "try-error" || class(xlsx_mastermix) == "try-error" )
     {
       print("No cDNA or Mastermix sheet there")
+      # so we go for Overview!
+      
+      overview_plate$overview <- as.tibble(overview_plate$overview)
+      overview_plate$overview <- overview_plate$overview %>% dplyr::filter(!is.na(value)) %>% dplyr::mutate(Sample = sub(pattern = "^(.*?)_.*$",replacement = "\\1", x = value)) %>% dplyr::mutate(Target = sub(pattern = "^.*?_(.*)$",replacement = "\\1", x = value))
+      
+      samplelist <- as.list(unique(overview_plate$overview$Sample))
+      names(samplelist) <- unique(overview_plate$overview$Sample)
       
       
-      xlsx_mastermix <- try(as.data.frame(openxlsx::read.xlsx(xlsxFile = qpcr_file$datapath, sheet = "qPCR Samples", colNames = TRUE, rowNames = TRUE), stringsAsFactors = FALSE))
       
-      if(class(xlsx_overview) == "try-error")
-      {
-        print("Could not find qPCR Overview sheet. Please check the name!")
-        error$qpcr_xlsx = TRUE
-        shinyBS::toggleModal(session, "qpcr_xlsx_error_modal", toggle = "open")
-        return(NULL)
-      }
+      # Now we construct our own platemaps!
+      # Sample = Sample Name
+      # Rack.Position = where to pipet from
+      # q_PCR_Well_Pos = where to pipet to (final plate)
+      #
+      xlsx_mastermix <- data.frame("Sample" = overview_plate$overview$Sample,
+                                      "Mastermix" = "mastermix",
+                                      "Rack Position" = "A1",
+                                      "Probe in µl" = "13",
+                                      "q_PCR_Plate" = "qpcr",
+                                      "q_PCR_Well_Pos" = overview_plate$overview$position,
+                                   stringsAsFactors = FALSE
+                                      )
       
-      sample_plate <- list()
-      sample_plate$overview <- reshape2::melt(as.matrix(xlsx_overview))
-      pattern <- expression("^(\\d{1})$")
-      #overview_plate$overview$Var2 <- sub(pattern = pattern, replacement = paste("0","\\1", sep=""), x=  overview_plate$overview$Var2, fixed = FALSE )
-      sample_plate$overview$position <- paste0(sample_plate$overview$Var1, sample_plate$overview$Var2)
-      
-      platemapMastermix <- dplyr::mutate(as.data.frame(overview_plate$overview),
-                                Row=as.numeric(match(toupper(substr(position, 1, 1)), LETTERS)),
-                                Column=as.numeric(substr(position, 2, 5)))
-      
-      samplelist <- as.list(unique(sample_plate$overview$value))
-      names(samplelist) <- unique(sample_plate$overview$value)
-      
-      
-      df_samples <- tibble("Position" = sample_plate$overview$position,
-                           "Type" = sample_plate$overview$value,
-                           "Replicate" = sample_plate$overview$position
+      xlsx_primer <- data.frame("Type" = overview_plate$overview$Target,
+                            "cDNA" = "cDNA",
+                            "Rack Position" = "A1",
+                            "Probe in µl" = "3",
+                            "q_PCR_Plate" = "qpcr",
+                            "q_PCR_Well_Pos" = overview_plate$overview$position,
+                            "Sample" = overview_plate$overview$Sample,
+                            "Replicate" = c(1,2,3),
+                            stringsAsFactors = FALSE
       )
       
+      xlsx_mastermix <- as.tibble(xlsx_mastermix)
+      xlsx_primer <- as.tibble(xlsx_primer)
+      
+      # name will stay old, but character will be the new name
+      for(i in 1:length(samplelist))
+      {
+        xlsx_mastermix$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_mastermix$Sample)
+        xlsx_primer$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_primer$Sample)
+      }
+      
+      # xlsx_mastermix <- as.tibble(platemapMastermix)
+      
+      platemapMastermix <- dplyr::mutate(xlsx_mastermix,
+                                         Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
+                                         Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+      
+      # Primer Plate - tells us which target genes
+      # Type = Target gene
+      # Rack.Position = from where it takes the primer set
+      # q_PCR_Plate = to where it pipettes (final plate)
+      # Sample = Sample1 to Sample 4 -> same as in MasterMix Plate
+      # Replicate = Which technical Replicate
+      
+      # xlsx_primer <- as.tibble(platemapPrimer)
+      
+      platemapPrimer <- dplyr::mutate(xlsx_primer,
+                                      Row=as.numeric(match(toupper(substr(q_PCR_Well_Pos, 1, 1)), LETTERS)),
+                                      Column=as.numeric(substr(q_PCR_Well_Pos, 2, 5)))
+      
+      
+      View(xlsx_mastermix)
+      View(xlsx_primer)
+      
+      df_samples <- tibble("Position" = xlsx_primer$q_PCR_Well_Pos,
+                           "Type" = xlsx_primer$Type,
+                           "Replicate" = xlsx_primer$Replicate
+      )
+      
+      # add Sample information from xlsx_mastermix
+      df_samples <- dplyr::left_join(x=df_samples, y = xlsx_mastermix, by=c("Position" = "q_PCR_Well_Pos"))
+      
       df_samples$SampleFinal <-  apply(df_samples,1, function(x) {
-        sample <- sub(x = x[["Type"]], pattern = "(.*)_(.*)", replacement = "\\1")
+        sample <- x[["Sample"]]
         replicate = x[["Replicate"]]
-        gene = sub(x = x[["Type"]], pattern = "(.*)_(.*)", replacement = "\\2")
+        gene = x[["Type"]]
         return(paste(sample,"-", gene, sep=""))
       })
-      
       
     } else {
       
@@ -125,7 +169,6 @@ qpcr_file_xlsx <- reactive({ #input$submit_qpcr_xlsx,
       names(samplelist) <- unique(xlsx_mastermix$Sample)
       
       # name will stay old, but character will be the new name
-      
       for(i in 1:length(samplelist))
       {
         xlsx_mastermix$Sample <- sub(pattern = names(samplelist)[i],replacement = samplelist[[i]],x = xlsx_mastermix$Sample)
@@ -175,6 +218,9 @@ qpcr_file_xlsx <- reactive({ #input$submit_qpcr_xlsx,
       
     }
     
+    
+    print(nrow(df_samples))
+    print(length(samplelist))
     
     ## AVAILABLE DATA STRUCTURES
     # file.read -> qPCR raw data
@@ -495,6 +541,8 @@ observe(qpcr_file_xlsx())
     df_samples$Control[df_samples$Control %in% input$qpcr_input_negcontrol] <- "Negative Control"
     df_samples$Control[!(df_samples$Control %in% c("Endogenous Control", "Positive Control", "Negative Control") )] <- "Target"
     
+    
+    
     # raw Cq data output for htqpcr
     output_cqdata <- df_samples[, c("Position", "Type", "Sample", "Cq", "Control", "Flag")]
     
@@ -516,11 +564,13 @@ observe(qpcr_file_xlsx())
     for(i in 1:length(n_samples$Files))
     {
       fullplate_df <- NULL
-      pos1 <- dplyr::filter(df_samples, Sample == n_samples$Treatment[i]) %>% dplyr::select( Position)
+      pos1 <- dplyr::filter(df_samples, Sample == n_samples$Treatment[i]) %>% dplyr::select(Position)
+
       fullplate_df <- tibble("Position" = pos1$Position)
       fullplate_df <- dplyr::left_join(fullplate_df, dplyr::filter(output_cqdata, Sample == n_samples$Treatment[i]))
       #fullplate_df <- dplyr::filter(output_cqdata, Sample == n_samples[i]) %>% dplyr::arrange(Type)
       pos <- dplyr::filter(df_samples, Sample == n_samples$Treatment[1]) %>% dplyr::select(Position)
+      
       fullplate_df$Position <- pos$Position
       # fullplate_df <- dplyr::full_join(fullplate_df, dplyr::select(df_samples, Position), by= "Position")
       fullplate_df <- dplyr::arrange(fullplate_df,Type)
@@ -1310,7 +1360,7 @@ output$qpcr_removewells <- renderUI({
   
   genes <- unique(qpcr_file_xlsx()$df_samples$Position)
   
-  return(shiny::selectizeInput(inputId = "qpcr_input_removewells", label = "Select the wells which you would like to ignore" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "qpcr_input_removewells", label = "Select the wells which you would like to ignore" , multiple = TRUE, options = list(maxItems = 384), choices = genes, width = "100%") )
   
 })
 
@@ -1321,7 +1371,7 @@ output$qpcr_refgenes <- renderUI({
   
   genes <- unique(qpcr_file_xlsx()$df_samples$Type)
 
-  return(shiny::selectizeInput(inputId = "qpcr_input_refgenes", label = "Select the Reference Genes for deltaCT normalization" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "qpcr_input_refgenes", label = "Select the Reference Genes for deltaCT normalization" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "50%") )
   
 })
 
@@ -1334,7 +1384,7 @@ output$qpcr_control <- renderUI({
   genes <- unique(qpcr_file_xlsx()$df_samples$Type)
   
   
-  return(shiny::selectizeInput(inputId = "qpcr_input_control", label = "Select the endogeneous control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "qpcr_input_control", label = "Select the endogeneous control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "50%") )
   
 })
 
@@ -1346,7 +1396,7 @@ output$qpcr_poscontrol <- renderUI({
   genes <- unique(qpcr_file_xlsx()$df_samples$Type)
   
   
-  return(shiny::selectizeInput(inputId = "qpcr_input_poscontrol", label = "Select the positive control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "qpcr_input_poscontrol", label = "Select the positive control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "50%") )
   
 })
 
@@ -1358,7 +1408,7 @@ output$qpcr_negcontrol <- renderUI({
   genes <- unique(qpcr_file_xlsx()$df_samples$Type)
   
   
-  return(shiny::selectizeInput(inputId = "qpcr_input_negcontrol", label = "Select the negative control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "qpcr_input_negcontrol", label = "Select the negative control genes" , multiple = TRUE, options = list(maxItems = 50), choices = genes, width = "50%") )
   
 })
 
@@ -1370,7 +1420,7 @@ output$qc_qpcr_sample <- renderUI({
   genes <- unique(qpcr_data()$tidy$Sample)
   
   
-  return(shiny::selectizeInput(inputId = "input_qc_qpcr_sample", label = "Select Sample" , multiple = FALSE, choices = genes, width = "30%") )
+  return(shiny::selectizeInput(inputId = "input_qc_qpcr_sample", label = "Select Sample" , multiple = FALSE, choices = genes, width = "50%") )
   
 })
 

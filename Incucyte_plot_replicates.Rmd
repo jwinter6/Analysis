@@ -1,0 +1,124 @@
+---
+title: "Incucyte_replicates"
+author: "Jan Winter"
+date: "22 Mai 2017"
+output: 
+  html_document:
+    fig.retina: 2
+---
+
+# Load Tidy TSV
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+# load TSV
+
+data <- readr::read_tsv(file = "/Users/janwinter/OneDrive/PhD/Followup/Results/Microscopy/2017-06-14_HEKTCF_A375TCF_sgRNAs/Analysis_tidy_noreps.tsv", col_names = TRUE)
+
+
+```
+
+# Data
+
+```{r data, results='asis'}
+
+```
+
+# Plots
+
+```{r plots}
+library(dplyr)
+# remove empty
+dbtimedata <- data %>% dplyr::filter(Sample != "Empty")
+
+#dbtimedata <- data %>% dplyr::filter(grepl(pattern = "HEK", Sample))
+
+# make plot
+
+g <- ggplot(data=dbtimedata, aes(x=Sample, y=DoublingTime))+
+  geom_boxplot() +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = paste("Calculated Doubling Time" ), x = "Samples", y = "Doubling Time [h]") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none")
+g
+
+filename = "DoublingTime_sgRNAs_sgRNAs_HEKTCF_A375.png"
+
+ggsave(filename = filename, plot = g,device = "png",dpi = 300,width = 10)
+
+# # plot starting density (normalized) to doubling time
+# 
+# dbtimestarting <- data %>% dplyr::filter(Sample != "Empty")
+# samples <- unique(dbtimestarting$Sample)
+# 
+# df <- tibble("Sample","DoublingTime","Start")
+# for(i in 1:length(samples))
+# {
+#   values <- dbtimestarting %>% dplyr::filter(Sample == samples[i]) %>% dplyr::select(Value)
+#   
+#   values
+#   n <- length(values$Value)
+#   sort(values$Value,partial=n-1)[n-1]
+# }
+
+
+# Make GGPLOT facet of curve
+g <- ggplot(data=data, aes(x=Elapsed, y=Value))+
+  geom_point(alpha = 1/5) +
+    #geom_jitter(shape=16, position=position_jitter(0.2)) +
+  labs(title = paste("Calculated Doubling Time" ), x = "Samples", y = "Doubling Time [h]") +
+    ggplot2::theme_bw() +
+    ggplot2::geom_hline(yintercept = 0) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none") +
+  facet_wrap(~Sample)
+g
+
+filename = "Curves_sgRNAs_sgRNAs_HEKTCF_A375.png"
+ggsave(filename = filename, plot = g,device = "png",dpi = 300,height = 10)
+# g <- ggplot(data=data, aes(x=Elapsed, y=Value))+
+#   geom_ribbon(aes(ymin = min(Value), ymax = max(Value)), fill = "grey70") +
+#     #geom_jitter(shape=16, position=position_jitter(0.2)) +
+#   labs(title = paste("Calculated Doubling Time" ), x = "Samples", y = "Doubling Time [h]") +
+#     ggplot2::theme_bw() +
+#     ggplot2::geom_hline(yintercept = 0) +
+#     theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.title = element_text(size = rel(1.1)), legend.position="none") +
+#   facet_wrap(~Sample)
+# g
+
+
+
+
+
+library(highcharter)
+
+hc <- highcharter::highchart() %>%
+  highcharter::hc_chart(type="spline",zoomType="xy")%>%
+  highcharter::hc_title(text = "Cell Confluence") %>%
+  highcharter::hc_subtitle(text = "") %>%
+  highcharter::hc_xAxis(title = list(text = "Sample")) %>%
+  highcharter::hc_yAxis(title = list(text = "Normalized Confluence in %")) %>%
+  highcharter::hc_legend(enabled = TRUE) %>%
+  highcharter::hc_exporting(enabled = TRUE,
+                 printMaxWidth = 2000,
+                 filename = paste(filename, "_Plot_all"),
+                 scale=8,
+                 formAttributes = list(target = "_blank")
+                 )
+
+  for(i in 1:length(unique(dbtimedata$Sample)))
+  {
+    sample <- unique(dbtimedata$Sample)[i]
+    plotdata <- dbtimedata %>% filter(Sample %in% sample) %>% dplyr::select(Elapsed, Value)
+    colnames(plotdata) <- c("x", "y")
+    hc <- highcharter::hc_add_series(hc, data = plotdata, name = sample)
+  }
+
+  hc <- highcharter::hc_tooltip(hc, crosshairs = TRUE, borderWidth = 0, delayForDisplay = 1500) %>%
+    highcharter::hc_add_theme(highcharter::hc_theme_google())
+
+hc
+
+```

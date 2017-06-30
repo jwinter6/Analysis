@@ -14,7 +14,7 @@ output:
 ```{r setup, include=FALSE}
 library(tidyverse)
 # load CSV files
-path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/Analysis_All/"
+path <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-06-26_candidate_expression/"
 
 
 files <- list.files(path = path ,pattern="*.csv")

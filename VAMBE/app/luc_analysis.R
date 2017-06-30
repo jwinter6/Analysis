@@ -34,7 +34,7 @@ tabItem(tabName = "luc_analysis", align = "center",
                                          downloadButton("DL_luc_analysis_plot_rawdata_RLUC_plate", label = "Download Plot"),
                                          plotOutput("luc_analysis_plot_rawdata_RLUC_plate")
                                ),
-                               tabPanel( "Ratio PLATE",
+                               tabPanel( "Log2 Ratio PLATE",
                                          downloadButton("DL_luc_analysis_plot_rawdata_RATIO_plate", label = "Download Plot"),
                                          plotOutput("luc_analysis_plot_rawdata_RATIO_plate")
                                )

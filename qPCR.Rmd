@@ -58,7 +58,7 @@ file <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-27_HEKTCF_R
 
 # XSLX overview file
 #file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-03-20_TEST_Primers/2017-03-20_qPCR_TEST_cDNASynthesis.xlsx"
-file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-04-27_HEKTCF_RLUC-noRTAPC-KLHL22-B4GALT6/qPCR_Overview_MASTER.xlsx"
+file_xlsx <- "/Users/janwinter/OneDrive/PhD/Followup/Results/qPCR/2017-06-26_candidate_expression/qPCR_2016-06-26_Candidate_expression_HEKTCF.xlsx"
 
 # read file data 
 ## use roche lightcycler defaults
@@ -154,8 +154,12 @@ platemap <- dplyr::mutate(as.data.frame(overview_plate$overview),
   samplelist <- list()
   if(!robot)
   {
-    samplelist <- as.list(unique(overview_plate$overview$value))
-    names(samplelist) <- unique(overview_plate$overview$value)
+    # get SAMPLE by dividing overview_plate$overview$value with _ -> SAMPLE_TARGET
+    overview_plate$overview <- as.tibble(overview_plate$overview)
+    overview_plate$overview <- overview_plate$overview %>% dplyr::filter(!is.na(value)) %>% dplyr::mutate(Sample = sub(pattern = "^(.*?)_.*$",replacement = "\\1", x = value)) %>% dplyr::mutate(Target = sub(pattern = "^.*?_(.*)$",replacement = "\\1", x = value))
+    
+    samplelist <- as.list(unique(overview_plate$overview$Sample))
+    names(samplelist) <- unique(overview_plate$overview$Sample)
   } else {
     samplelist <- as.list(unique(xlsx_mastermix$Sample))
     names(samplelist) <- unique(xlsx_mastermix$Sample)
